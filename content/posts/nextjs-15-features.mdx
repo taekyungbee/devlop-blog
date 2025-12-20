@@ -1,0 +1,58 @@
+---
+title: Next.js 15의 새로운 기능들
+description: Next.js 15에서 추가된 주요 기능들을 살펴봅니다.
+date: 2024-12-17
+tags: ["nextjs", "react", "frontend"]
+published: true
+---
+
+## Next.js 15 소개
+
+Next.js 15는 React 19를 지원하며 다양한 새로운 기능들을 제공합니다.
+
+### 주요 변경사항
+
+#### 1. React 19 지원
+
+Next.js 15는 React 19의 새로운 기능들을 완벽하게 지원합니다:
+
+- Server Components 개선
+- Actions API
+- 향상된 Suspense 지원
+
+#### 2. Turbopack 안정화
+
+개발 서버에서 Turbopack이 기본으로 활성화되어 빠른 개발 경험을 제공합니다.
+
+```bash
+# Turbopack으로 개발 서버 실행
+npm run dev
+```
+
+#### 3. 캐싱 전략 변경
+
+fetch 요청의 기본 캐싱 동작이 변경되었습니다:
+
+```typescript
+// Next.js 15에서는 기본적으로 캐시되지 않음
+const data = await fetch('https://api.example.com/data');
+
+// 캐싱을 원하면 명시적으로 설정
+const cachedData = await fetch('https://api.example.com/data', {
+  cache: 'force-cache'
+});
+```
+
+<Callout type="warning">
+  기존 프로젝트를 업그레이드할 때는 캐싱 동작 변경에 주의하세요.
+</Callout>
+
+### 마이그레이션 가이드
+
+Next.js 14에서 15로 업그레이드하려면:
+
+1. dependencies 업데이트
+2. 캐싱 전략 검토
+3. 새로운 기능 활용
+
+더 자세한 내용은 [Next.js 공식 문서](https://nextjs.org/docs)를 참고하세요.

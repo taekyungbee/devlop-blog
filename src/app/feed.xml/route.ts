@@ -1,0 +1,40 @@
+import { posts } from "#site/content";
+import { siteConfig } from "@/config/site";
+
+export async function GET() {
+  const publishedPosts = posts
+    .filter((post) => post.published)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const feed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${siteConfig.name}</title>
+    <link>${siteConfig.url}</link>
+    <description>${siteConfig.description}</description>
+    <language>ko</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <atom:link href="${siteConfig.url}/feed.xml" rel="self" type="application/rss+xml"/>
+    ${publishedPosts
+      .map(
+        (post) => `
+    <item>
+      <title><![CDATA[${post.title}]]></title>
+      <link>${siteConfig.url}/${post.slug}</link>
+      <guid isPermaLink="true">${siteConfig.url}/${post.slug}</guid>
+      <description><![CDATA[${post.description ?? ""}]]></description>
+      <pubDate>${new Date(post.date).toUTCString()}</pubDate>
+      ${post.tags?.map((tag) => `<category>${tag}</category>`).join("\n      ") ?? ""}
+    </item>`
+      )
+      .join("")}
+  </channel>
+</rss>`;
+
+  return new Response(feed, {
+    headers: {
+      "Content-Type": "application/xml",
+      "Cache-Control": "s-maxage=3600, stale-while-revalidate",
+    },
+  });
+}
