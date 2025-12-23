@@ -2,7 +2,8 @@ backend:
   name: github
   repo: taekyungbee/devlop-blog
   branch: develop
-  base_url: https://decap-oauth.netlify.app
+  base_url: http://34.64.105.235
+  auth_endpoint: /api/auth
 
 media_folder: public/images/posts
 public_folder: /images/posts
