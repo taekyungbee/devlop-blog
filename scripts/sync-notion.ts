@@ -16,18 +16,11 @@ const n2m = new NotionToMarkdown({ notionClient: notion });
 
 interface NotionPage {
   id: string;
-  properties: {
-    Title?: { title: Array<{ plain_text: string }> };
-    Slug?: { rich_text: Array<{ plain_text: string }> };
-    Tags?: { multi_select: Array<{ name: string }> };
-    Published?: { checkbox: boolean };
-    Date?: { date: { start: string } | null };
-    Description?: { rich_text: Array<{ plain_text: string }> };
-  };
+  properties: Record<string, unknown>;
 }
 
 async function getPublishedPosts(): Promise<NotionPage[]> {
-  const response = await notion.databases.query({
+  const response = await (notion as any).databases.query({
     database_id: NOTION_DATABASE_ID!,
     filter: {
       property: "Published",
@@ -47,22 +40,22 @@ async function getPublishedPosts(): Promise<NotionPage[]> {
 }
 
 function getProperty(page: NotionPage) {
-  const props = page.properties;
+  const props = page.properties as any;
 
   const title =
-    props.Title?.title?.map((t) => t.plain_text).join("") || "Untitled";
+    props.Title?.title?.map((t: any) => t.plain_text).join("") || "Untitled";
   const slug =
-    props.Slug?.rich_text?.map((t) => t.plain_text).join("") ||
+    props.Slug?.rich_text?.map((t: any) => t.plain_text).join("") ||
     title.toLowerCase().replace(/\s+/g, "-");
-  const tags = props.Tags?.multi_select?.map((t) => t.name) || [];
+  const tags = props.Tags?.multi_select?.map((t: any) => t.name) || [];
   const date = props.Date?.date?.start || new Date().toISOString().split("T")[0];
   const description =
-    props.Description?.rich_text?.map((t) => t.plain_text).join("") || "";
+    props.Description?.rich_text?.map((t: any) => t.plain_text).join("") || "";
 
   return { title, slug, tags, date, description };
 }
 
-async function pageToMdx(page: NotionPage): Promise<string> {
+async function pageToMdx(page: NotionPage): Promise<{ content: string; slug: string }> {
   const { title, slug, tags, date, description } = getProperty(page);
 
   const mdBlocks = await n2m.pageToMarkdown(page.id);
@@ -72,7 +65,7 @@ async function pageToMdx(page: NotionPage): Promise<string> {
 title: "${title}"
 description: "${description}"
 date: ${date}
-tags: [${tags.map((t) => `"${t}"`).join(", ")}]
+tags: [${tags.map((t: string) => `"${t}"`).join(", ")}]
 published: true
 ---
 
