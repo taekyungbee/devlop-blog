@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "velite --watch & next dev --hostname 0.0.0.0",
+    "dev": "velite --watch & next dev --hostname 0.0.0.0 -p 7000",
     "build": "velite && next build",
     "start": "next start",
     "lint": "eslint",
