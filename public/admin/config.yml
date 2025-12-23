@@ -13,11 +13,12 @@ collections:
     label: "Posts"
     folder: "content/posts"
     create: true
-    slug: "{{slug}}"
+    slug: "{{fields.slug}}"
     extension: "mdx"
     format: "frontmatter"
     fields:
       - { label: "Title", name: "title", widget: "string" }
+      - { label: "Slug", name: "slug", widget: "string", pattern: ['^[a-z0-9-]+$', "영문 소문자, 숫자, 하이픈만 가능"] }
       - { label: "Description", name: "description", widget: "string", required: false }
       - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD" }
       - { label: "Tags", name: "tags", widget: "list", required: false }
