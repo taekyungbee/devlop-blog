@@ -28,7 +28,7 @@ jobs:
 
       - name: Create deployment package
         run: |
-          tar --exclude='node_modules' --exclude='.git' -czf deploy.tar.gz .
+          tar --exclude='node_modules' --exclude='.git' --warning=no-file-changed -czf deploy.tar.gz . || true
 
       - name: Copy to VM
         uses: appleboy/scp-action@v0.1.7
