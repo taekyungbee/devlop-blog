@@ -1,7 +1,7 @@
 import Parser from "rss-parser";
 import { getVideosFromDb, getNewsFromDb, saveVideos, saveNews, DbTrendItem } from "./db";
 
-export interface TrendItem extends DbTrendItem { }
+export type TrendItem = DbTrendItem;
 
 export interface AiTrends {
     videos: TrendItem[];

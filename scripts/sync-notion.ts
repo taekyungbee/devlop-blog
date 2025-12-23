@@ -19,8 +19,25 @@ interface NotionPage {
   properties: Record<string, unknown>;
 }
 
+interface TextContent {
+  plain_text: string;
+}
+
+interface SelectOption {
+  name: string;
+}
+
+interface NotionProperties {
+  Title?: { title?: TextContent[] };
+  Slug?: { rich_text?: TextContent[] };
+  Tags?: { multi_select?: SelectOption[] };
+  Date?: { date?: { start: string } };
+  Description?: { rich_text?: TextContent[] };
+}
+
 async function getPublishedPosts(): Promise<NotionPage[]> {
-  const response = await (notion as any).databases.query({
+  // @ts-expect-error - Notion SDK 타입 정의가 불완전함
+  const response = await notion.databases.query({
     database_id: NOTION_DATABASE_ID!,
     filter: {
       property: "Published",
@@ -40,17 +57,17 @@ async function getPublishedPosts(): Promise<NotionPage[]> {
 }
 
 function getProperty(page: NotionPage) {
-  const props = page.properties as any;
+  const props = page.properties as NotionProperties;
 
   const title =
-    props.Title?.title?.map((t: any) => t.plain_text).join("") || "Untitled";
+    props.Title?.title?.map((t) => t.plain_text).join("") || "Untitled";
   const slug =
-    props.Slug?.rich_text?.map((t: any) => t.plain_text).join("") ||
+    props.Slug?.rich_text?.map((t) => t.plain_text).join("") ||
     title.toLowerCase().replace(/\s+/g, "-");
-  const tags = props.Tags?.multi_select?.map((t: any) => t.name) || [];
+  const tags = props.Tags?.multi_select?.map((t) => t.name) || [];
   const date = props.Date?.date?.start || new Date().toISOString().split("T")[0];
   const description =
-    props.Description?.rich_text?.map((t: any) => t.plain_text).join("") || "";
+    props.Description?.rich_text?.map((t) => t.plain_text).join("") || "";
 
   return { title, slug, tags, date, description };
 }
