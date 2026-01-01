@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
-import { clearAllTrends } from "@/lib/db";
 import { updateAiTrends } from "@/lib/ai-trends";
 
 export async function POST() {
     try {
-        // 1. DB에서 모든 기존 데이터 삭제
-        await clearAllTrends();
-
-        // 2. YouTube RSS와 News RSS에서 새 데이터 가져오기
+        // YouTube RSS와 News RSS에서 새 데이터 가져오기 (upsert)
         await updateAiTrends();
 
         return NextResponse.json({

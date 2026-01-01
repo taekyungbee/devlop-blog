@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { clearAllTrends } from "@/lib/db";
 import { updateAiTrends } from "@/lib/ai-trends";
 import { summarizeVideosBatch } from "@/lib/video-summarizer";
 import { syncRecentSummariesToNotion, isNotionConfigured } from "@/lib/notion-trends";
@@ -8,14 +7,15 @@ import { isGeminiConfigured } from "@/lib/gemini-api";
 /**
  * POST /api/trends/daily
  * 일일 트렌드 작업 순차 실행: RSS 수집 → 요약 생성 → Notion 동기화
+ * - RSS: 새 영상만 추가 (upsert)
+ * - 요약: summary가 null인 영상만 처리
  */
 export async function POST() {
   const results: { step: string; success: boolean; detail?: string }[] = [];
 
   try {
-    // 1. RSS 수집
+    // 1. RSS 수집 (기존 데이터 유지, 새 영상만 추가)
     console.log("[Daily] Step 1: RSS 수집 시작");
-    await clearAllTrends();
     await updateAiTrends();
     results.push({
       step: "refresh",
