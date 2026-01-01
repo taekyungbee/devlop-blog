@@ -10,9 +10,14 @@
     "type-check": "tsc --noEmit",
     "sync:notion": "npx tsx scripts/sync-notion.ts",
     "db:pull": "prisma db pull",
-    "db:generate": "prisma generate"
+    "db:generate": "prisma generate",
+    "docker:build": "docker build -t develop-blog .",
+    "docker:run": "docker run -p 8080:8080 --env-file .env develop-blog",
+    "deploy": "bash scripts/deploy-cloud-run.sh"
   },
   "dependencies": {
+    "@distube/ytdl-core": "^4.16.12",
+    "@google/generative-ai": "^0.24.1",
     "@notionhq/client": "^5.6.0",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
@@ -20,8 +25,8 @@
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tabs": "^1.1.13",
     "@tailwindcss/typography": "^0.5.19",
-    "better-sqlite3": "^12.5.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -31,6 +36,7 @@
     "next-mdx-remote": "^5.0.0",
     "next-themes": "^0.4.6",
     "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.12",
     "notion-to-md": "^3.1.9",
     "pg": "^8.16.3",
     "prisma": "^7.2.0",
@@ -44,13 +50,15 @@
     "rss-parser": "^3.13.0",
     "shiki": "^3.20.0",
     "tailwind-merge": "^3.4.0",
-    "velite": "^0.3.1"
+    "velite": "^0.3.1",
+    "youtube-transcript": "^1.2.1",
+    "youtubei.js": "^16.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",

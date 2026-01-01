@@ -1,5 +1,14 @@
 import Parser from "rss-parser";
-import { getVideosFromDb, getNewsFromDb, saveVideos, saveNews, DbTrendItem } from "./db";
+import {
+    getVideosFromDb,
+    getNewsFromDb,
+    saveVideos,
+    saveNews,
+    DbTrendItem,
+    getActiveChannels,
+    addChannel,
+    YouTubeChannelData,
+} from "./db";
 
 export type TrendItem = DbTrendItem;
 
@@ -10,199 +19,131 @@ export interface AiTrends {
 
 const parser = new Parser();
 
-// YouTube Channel IDs
-const YOUTUBE_CHANNELS = [
-    { id: "UCBFxh_9Tr_J-u7RcYvrJ0Kg", name: "Two Minute Papers" },
-    { id: "UCxgknM36W5jYZk6QY_194_g", name: "OpenAI" },
+// 초기 채널 데이터 (DB가 비어있을 때 시드)
+const INITIAL_CHANNELS: YouTubeChannelData[] = [
+    // 한국 채널 - 사용자 구독 채널
+    { channelId: "UCxj3eVTAv9KLdrowXcuCFDQ", name: "빌더 조쉬 Builder Josh", category: "korean" },
+    { channelId: "UCxZ2AlaT0hOmxzZVbF_j_Sw", name: "코드팩토리", category: "korean" },
+    { channelId: "UCXKXULkq--aSgzScYeLYJog", name: "단테랩스", category: "korean" },
+    { channelId: "UC4QaHaQJ3t8nYDOO7NiDfcA", name: "Daniel Vision School Korea", category: "korean" },
+    { channelId: "UCUpkgT9Entggw2fMBprWM4w", name: "엔드플랜 Endplan AI", category: "korean" },
+    { channelId: "UCSJDgl6tVc08c5d6y6vuufA", name: "Metics Media | 한국어", category: "korean" },
+    { channelId: "UCDLlMjELbrJdETmSiAB68AA", name: "시민개발자 구씨", category: "korean" },
+    { channelId: "UCBtG00ljZ8R_DBQCTR4C00A", name: "기술노트with 알렉", category: "korean" },
+    { channelId: "UC7iAOLiALt2rtMVAWWl4pnw", name: "나도코딩", category: "korean" },
+    { channelId: "UCUpJs89fSBXNolQGOYKn0YQ", name: "노마드 코더 Nomad Coders", category: "korean" },
+    { channelId: "UCQNE2JmbasNYbjGAcuBiRRg", name: "조코딩 JoCoding", category: "korean" },
+    { channelId: "UCSLrpBAzr-ROVGHQ5EmxnUg", name: "코딩애플", category: "korean" },
+    { channelId: "UCvc8kv-i5fvFTJBFAk6n1SA", name: "생활코딩", category: "korean" },
+    { channelId: "UCSEOUzkGNCT_29EU_vnBYjg", name: "개발바닥", category: "korean" },
+    // AI 전문 채널
+    { channelId: "UCt2wAAXgm87ACiQnDHQEW6Q", name: "테디노트 TeddyNote", category: "korean" },
+    { channelId: "UC2L1DgDMD5pJ-35G47Objfw", name: "빵형의 개발도상국", category: "korean" },
+    { channelId: "UCeN2YeJcBCRJoXgzF_OU3qw", name: "안될공학", category: "korean" },
+    { channelId: "UCt9jbjxLBawaSaEsGB87D6g", name: "딥러닝 호형", category: "korean" },
+    { channelId: "UCHcG02L6TSS-StkSbqVy6Fg", name: "코드없는 프로그래밍", category: "korean" },
+    // 글로벌 채널
+    { channelId: "UC_x5XG1OV2P6uZZ5FSM9Ttw", name: "Google for Developers", category: "global" },
+    { channelId: "UCsBjURrPoezykLs9EqgamOA", name: "Fireship", category: "global" },
+    { channelId: "UCbfYPyITQ-7l4upoX8nvctg", name: "Two Minute Papers", category: "global" },
+    { channelId: "UCXZCJLdBC09xxGZ6gcdrc6A", name: "OpenAI", category: "global" },
+    { channelId: "UCFbNIlppjAuEX4znoulh0Cw", name: "Web Dev Simplified", category: "global" },
+    { channelId: "UCW5YeuERMmlnqo4oq8vwUpg", name: "The Net Ninja", category: "global" },
+    { channelId: "UC29ju8bIPH5as8OGnQzwJyA", name: "Traversy Media", category: "global" },
+    { channelId: "UCyU5wkjgQYGRB0hIHMwm2Sg", name: "Theo - t3.gg", category: "global" },
 ];
 
-const SEED_VIDEOS: TrendItem[] = [
-    {
-        title: "Google Gemini의 '나노 바나나' 실용 활용 사례 Top 10 (+프롬프트 공개)",
-        link: "https://www.youtube.com/watch?v=s_q_M5_J3hU",
-        pubDate: "2025-12-20T18:00:00Z",
-        source: "조코딩 JoCoding",
-        thumbnail: "https://img.youtube.com/vi/s_q_M5_J3hU/mqdefault.jpg",
-    },
-    {
-        title: "진정한 자동화의 시작... 클로드의 능력을 극대화하면 벌어지는 일",
-        link: "https://www.youtube.com/watch?v=HK6y8DAPN_0",
-        pubDate: "2025-12-20T09:00:00Z",
-        source: "앤드플랜 AndPlan",
-        thumbnail: "https://img.youtube.com/vi/HK6y8DAPN_0/mqdefault.jpg",
-    },
-    {
-        title: "AI 에이전트 + 워크플로우 + 브라우저? FlowithOS 딥다이브",
-        link: "https://www.youtube.com/watch?v=kYJjZkI5M3M",
-        pubDate: "2025-12-19T14:00:00Z",
-        source: "단테랩스 Dante Labs",
-        thumbnail: "https://img.youtube.com/vi/kYJjZkI5M3M/mqdefault.jpg",
-    },
-    {
-        title: "AI를 활용할 때 반드시 지킬 2가지 원칙 (자동화 기초)",
-        link: "https://www.youtube.com/watch?v=yqTAXAXgTPHI",
-        pubDate: "2025-12-03T10:00:00Z",
-        source: "그랜트 Grant",
-        thumbnail: "https://img.youtube.com/vi/yqTAXAXgTPHI/mqdefault.jpg",
-    },
-    {
-        title: "[2026 로드맵] 12월 21일, 지금 당장 시작해야 할 개발 공부 순서",
-        link: "https://www.youtube.com/watch?v=YP1K6W6Yq-Q",
-        pubDate: "2025-12-21T08:00:00Z",
-        source: "노마드 코더 Nomad Coders",
-        thumbnail: "https://img.youtube.com/vi/YP1K6W6Yq-Q/mqdefault.jpg",
-    },
-    {
-        title: "현직 개발팀장이 알려주는 클로드 코딩 노하우 (feat. 수지아빠)",
-        link: "https://www.youtube.com/watch?v=TirDOyeur0lcc",
-        pubDate: "2025-11-01T15:30:00Z",
-        source: "수지아빠",
-        thumbnail: "https://img.youtube.com/vi/TirDOyeur0lcc/mqdefault.jpg",
-    },
-    {
-        title: "개발자를 위한 차세대 AI 검색 엔진 'Perplexity 4.0' 리뷰",
-        link: "https://www.youtube.com/watch?v=F3x9Q5g6l7s",
-        pubDate: "2025-12-18T11:00:00Z",
-        source: "시민개발자 구씨",
-        thumbnail: "https://img.youtube.com/vi/F3x9Q5g6l7s/mqdefault.jpg",
-    },
-    {
-        title: "플러터 4.0 업데이트 총정리! 이제 진짜 네이티브 성능?",
-        link: "https://www.youtube.com/watch?v=Z3x8_4G5H9I",
-        pubDate: "2025-12-17T20:00:00Z",
-        source: "코드팩토리",
-        thumbnail: "https://img.youtube.com/vi/Z3x8_4G5H9I/mqdefault.jpg",
-    },
-    {
-        title: "Git & GitHub, 2026년에는 이렇게 바뀝니다 (AI 기능 탑재)",
-        link: "https://www.youtube.com/watch?v=1I3hMwQU6GU",
-        pubDate: "2025-12-15T13:00:00Z",
-        source: "얄팍한 코딩사전",
-        thumbnail: "https://img.youtube.com/vi/1I3hMwQU6GU/mqdefault.jpg",
-    },
-    {
-        title: "웹 4.0의 서막, 탈중앙화 AI와 블록체인의 결합",
-        link: "https://www.youtube.com/watch?v=tZooW6PritE",
-        pubDate: "2025-12-10T09:00:00Z",
-        source: "생활코딩",
-        thumbnail: "https://img.youtube.com/vi/tZooW6PritE/mqdefault.jpg",
-    },
-    {
-        title: "AI 뉴스 - GPT-6 루머와 오픈AI의 새로운 행보",
-        link: "https://www.youtube.com/watch?v=yYfG-fR9A7M",
-        pubDate: "2025-12-21T07:00:00Z",
-        source: "Metics Media | 한국어",
-        thumbnail: "https://img.youtube.com/vi/yYfG-fR9A7M/mqdefault.jpg",
-    },
-    {
-        title: "나도코딩의 파이썬 심화: AI 에이전트 만들기 실전",
-        link: "https://www.youtube.com/watch?v=kWiCuklohdY",
-        pubDate: "2025-12-16T18:00:00Z",
-        source: "나도코딩",
-        thumbnail: "https://img.youtube.com/vi/kWiCuklohdY/mqdefault.jpg",
+// 채널 시드 (DB에 INITIAL_CHANNELS의 모든 채널이 있는지 확인 및 추가)
+export async function seedChannels() {
+    console.log("[Seed] Syncing YouTube channels with INITIAL_CHANNELS...");
+    for (const channel of INITIAL_CHANNELS) {
+        await addChannel(channel);
     }
-];
-
-const SEED_NEWS: TrendItem[] = [
-    {
-        title: "정부, 2026년까지 AI 인재 10만 양성 계획 발표",
-        link: "https://news.google.com",
-        pubDate: "2025-12-20T10:00:00Z",
-        source: "대한민국 정책브리핑",
-    },
-    {
-        title: "삼성전자, 차세대 AI 반도체 '마하-3' 공개 임박",
-        link: "https://news.google.com",
-        pubDate: "2025-12-19T14:30:00Z",
-        source: "전자신문",
-    },
-    {
-        title: "네이버, 한국형 LLM '하이퍼클로바Z 2.0' 글로벌 진출",
-        link: "https://news.google.com",
-        pubDate: "2025-12-18T09:15:00Z",
-        source: "IT조선",
-    },
-    {
-        title: "카카오, AI 비서 '카나나' 월간 사용자 1000만 돌파",
-        link: "https://news.google.com",
-        pubDate: "2025-12-21T11:00:00Z",
-        source: "테크M",
-    },
-    {
-        title: "[단독] LG AI연구원, 신물질 발견 AI 모델 '엑사원 디스커버리' 성과",
-        link: "https://news.google.com",
-        pubDate: "2025-12-17T16:45:00Z",
-        source: "매일경제",
-    }
-];
+}
 
 export async function updateAiTrends() {
     console.log("[Scheduler] Starting AI Trends update...");
+
+    // 채널 시드 확인
+    await seedChannels();
+
     const videos: TrendItem[] = [];
     const news: TrendItem[] = [];
 
-    // 1. Fetch YouTube
-    try {
-        for (const channel of YOUTUBE_CHANNELS) {
+    // DB에서 활성 채널 가져오기
+    const channels = await getActiveChannels();
+
+    // 1. Fetch YouTube RSS (최신 영상)
+    for (const channel of channels) {
+        try {
             const feed = await parser.parseURL(
-                `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`
+                `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.channelId}`
             );
 
             feed.items.slice(0, 5).forEach((item) => {
-                const videoId = item.id.replace("yt:video:", "");
-                videos.push({
-                    title: item.title || "No Title",
-                    link: item.link || "#",
-                    pubDate: item.pubDate || new Date().toISOString(),
-                    source: channel.name,
-                    thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
-                });
+                const videoId = item.id?.replace("yt:video:", "") || "";
+                if (videoId) {
+                    videos.push({
+                        title: item.title || "No Title",
+                        link: item.link || `https://www.youtube.com/watch?v=${videoId}`,
+                        pubDate: item.pubDate || new Date().toISOString(),
+                        source: channel.name,
+                        thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+                    });
+                }
             });
+        } catch (error) {
+            console.error(`[Scheduler] YouTube fetch failed for ${channel.name}:`, error);
         }
-    } catch (error) {
-        console.error("[Scheduler] YouTube fetch failed, using fallback/seed logic partly if needed", error);
     }
 
-    // Always insert Seed Data if they are deeper in history or separate
-    // For now, let's just merge seed data to ensure we have content
-    videos.push(...SEED_VIDEOS);
-
-
-    // 2. Fetch News
+    // 2. Fetch News RSS
     try {
         const feed = await parser.parseURL(
-            "https://news.google.com/rss/search?q=인공지능+when:7d&hl=ko&gl=KR&ceid=KR:ko"
+            "https://news.google.com/rss/search?q=%EC%9D%B8%EA%B3%B5%EC%A7%80%EB%8A%A5+OR+AI+OR+ChatGPT+when:7d&hl=ko&gl=KR&ceid=KR:ko"
         );
-        feed.items.slice(0, 10).forEach((item) => {
+        feed.items.slice(0, 50).forEach((item) => {
             news.push({
                 title: item.title || "No Title",
                 link: item.link || "#",
                 pubDate: item.pubDate || new Date().toISOString(),
-                source: item.source || "Google News",
+                source: extractSource(item.title) || "Google News",
             });
         });
     } catch (error) {
-        console.error("[Scheduler] News fetch failed", error);
+        console.error("[Scheduler] News fetch failed:", error);
     }
 
-    news.push(...SEED_NEWS);
-
     // Save to DB
-    saveVideos(videos);
-    saveNews(news);
+    if (videos.length > 0) {
+        await saveVideos(videos);
+    }
+    if (news.length > 0) {
+        await saveNews(news);
+    }
     console.log(`[Scheduler] Updated ${videos.length} videos and ${news.length} news items.`);
 }
 
+// Google News RSS 제목에서 출처 추출 (예: "뉴스 제목 - 한겨레")
+function extractSource(title: string | undefined): string {
+    if (!title) return "Google News";
+    const match = title.match(/ - ([^-]+)$/);
+    return match ? match[1].trim() : "Google News";
+}
+
 export async function getAiTrends(): Promise<AiTrends> {
-    let videos = getVideosFromDb(20);
-    let news = getNewsFromDb(20);
+    // 채널 시드 확인
+    await seedChannels();
+
+    let videos = await getVideosFromDb(50);
+    let news = await getNewsFromDb(20);
 
     // If DB is empty, trigger an update immediately (first run)
     if (videos.length === 0 && news.length === 0) {
         console.log("[DB] Empty, triggering initial update...");
         await updateAiTrends();
-        videos = getVideosFromDb(20);
-        news = getNewsFromDb(20);
+        videos = await getVideosFromDb(50);
+        news = await getNewsFromDb(20);
     }
 
     return { videos, news };

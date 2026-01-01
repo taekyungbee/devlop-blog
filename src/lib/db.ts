@@ -1,110 +1,278 @@
-import Database from "better-sqlite3";
-import path from "path";
-import fs from "fs";
-
-// Ensure data directory exists
-const dbDir = path.join(process.cwd(), "data");
-if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
-}
-
-const dbPath = path.join(dbDir, "trends.db");
-const db = new Database(dbPath);
-
-// Initialize Tables
-db.exec(`
-  CREATE TABLE IF NOT EXISTS videos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    link TEXT NOT NULL UNIQUE,
-    pubDate TEXT NOT NULL,
-    source TEXT NOT NULL,
-    thumbnail TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS news (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    link TEXT NOT NULL UNIQUE,
-    pubDate TEXT NOT NULL,
-    source TEXT NOT NULL
-  );
-`);
+import { prisma } from "./prisma";
 
 export interface DbTrendItem {
-    title: string;
-    link: string;
-    pubDate: string;
-    source: string;
-    thumbnail?: string;
+  title: string;
+  link: string;
+  pubDate: string;
+  source: string;
+  thumbnail?: string;
+  summary?: string;
 }
 
-export function saveVideos(videos: DbTrendItem[]) {
-    const insert = db.prepare(`
-        INSERT OR IGNORE INTO videos (title, link, pubDate, source, thumbnail)
-        VALUES (@title, @link, @pubDate, @source, @thumbnail)
-    `);
+/**
+ * YouTube 링크 정규화 (/shorts/xxx -> /watch?v=xxx)
+ */
+function normalizeYouTubeLink(link: string): string {
+  // /shorts/VIDEO_ID -> /watch?v=VIDEO_ID
+  const shortsMatch = link.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
+  if (shortsMatch) {
+    return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+  }
+  return link;
+}
 
-    const update = db.prepare(`
-        UPDATE videos SET pubDate = @pubDate, source = @source, thumbnail = @thumbnail
-        WHERE link = @link
-    `);
+export async function saveVideos(videos: DbTrendItem[]) {
+  for (const video of videos) {
+    const pubDate = new Date(video.pubDate);
+    const normalizedLink = normalizeYouTubeLink(video.link);
 
-    const deleteOld = db.prepare(`
-        DELETE FROM videos WHERE id NOT IN (
-            SELECT id FROM videos ORDER BY pubDate DESC LIMIT 50
-        )
-    `); // Keep only latest 50
-
-    const transaction = db.transaction((items: DbTrendItem[]) => {
-        for (const item of items) {
-            const info = insert.run(item);
-            if (info.changes === 0) {
-                update.run(item);
-            }
-        }
-        deleteOld.run();
+    await prisma.trendVideo.upsert({
+      where: { link: normalizedLink },
+      update: {
+        title: video.title,
+        pubDate,
+        source: video.source,
+        thumbnail: video.thumbnail,
+      },
+      create: {
+        title: video.title,
+        link: normalizedLink,
+        pubDate,
+        source: video.source,
+        thumbnail: video.thumbnail,
+      },
     });
+  }
 
-    transaction(videos);
-}
+  // Keep only latest 5000
+  const oldVideos = await prisma.trendVideo.findMany({
+    orderBy: { pubDate: "desc" },
+    skip: 5000,
+    select: { id: true },
+  });
 
-export function saveNews(newsItems: DbTrendItem[]) {
-    const insert = db.prepare(`
-        INSERT OR IGNORE INTO news (title, link, pubDate, source)
-        VALUES (@title, @link, @pubDate, @source)
-    `);
-
-    const update = db.prepare(`
-        UPDATE news SET pubDate = @pubDate, source = @source
-        WHERE link = @link
-    `);
-
-    const deleteOld = db.prepare(`
-        DELETE FROM news WHERE id NOT IN (
-            SELECT id FROM news ORDER BY pubDate DESC LIMIT 50
-        )
-    `);
-
-    const transaction = db.transaction((items: DbTrendItem[]) => {
-        for (const item of items) {
-            const info = insert.run(item);
-            if (info.changes === 0) {
-                update.run(item);
-            }
-        }
-        deleteOld.run();
+  if (oldVideos.length > 0) {
+    await prisma.trendVideo.deleteMany({
+      where: { id: { in: oldVideos.map((v) => v.id) } },
     });
-
-    transaction(newsItems);
+  }
 }
 
-export function getVideosFromDb(limit = 10): DbTrendItem[] {
-    const stmt = db.prepare("SELECT title, link, pubDate, source, thumbnail FROM videos ORDER BY pubDate DESC LIMIT ?");
-    return stmt.all(limit) as DbTrendItem[];
+export async function saveNews(newsItems: DbTrendItem[]) {
+  for (const news of newsItems) {
+    const pubDate = new Date(news.pubDate);
+
+    await prisma.trendNews.upsert({
+      where: { link: news.link },
+      update: {
+        title: news.title,
+        pubDate,
+        source: news.source,
+      },
+      create: {
+        title: news.title,
+        link: news.link,
+        pubDate,
+        source: news.source,
+      },
+    });
+  }
+
+  // Keep only latest 5000
+  const oldNews = await prisma.trendNews.findMany({
+    orderBy: { pubDate: "desc" },
+    skip: 5000,
+    select: { id: true },
+  });
+
+  if (oldNews.length > 0) {
+    await prisma.trendNews.deleteMany({
+      where: { id: { in: oldNews.map((n) => n.id) } },
+    });
+  }
 }
 
-export function getNewsFromDb(limit = 10): DbTrendItem[] {
-    const stmt = db.prepare("SELECT title, link, pubDate, source FROM news ORDER BY pubDate DESC LIMIT ?");
-    return stmt.all(limit) as DbTrendItem[];
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export async function getVideosFromDb(limit = 10): Promise<DbTrendItem[]> {
+  const videos = await prisma.trendVideo.findMany({
+    orderBy: { pubDate: "desc" },
+    take: limit,
+  });
+
+  return videos.map((v) => ({
+    title: v.title,
+    link: v.link,
+    pubDate: v.pubDate.toISOString(),
+    source: v.source,
+    thumbnail: v.thumbnail ?? undefined,
+  }));
+}
+
+export async function getVideosPaginated(
+  page = 1,
+  pageSize = 20,
+  source?: string
+): Promise<PaginatedResult<DbTrendItem>> {
+  const where = source ? { source } : {};
+
+  const [videos, total] = await Promise.all([
+    prisma.trendVideo.findMany({
+      where,
+      orderBy: { pubDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.trendVideo.count({ where }),
+  ]);
+
+  return {
+    items: videos.map((v) => ({
+      title: v.title,
+      link: v.link,
+      pubDate: v.pubDate.toISOString(),
+      source: v.source,
+      thumbnail: v.thumbnail ?? undefined,
+      summary: v.summary ?? undefined,
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+export async function getNewsFromDb(limit = 10): Promise<DbTrendItem[]> {
+  const news = await prisma.trendNews.findMany({
+    orderBy: { pubDate: "desc" },
+    take: limit,
+  });
+
+  return news.map((n) => ({
+    title: n.title,
+    link: n.link,
+    pubDate: n.pubDate.toISOString(),
+    source: n.source,
+  }));
+}
+
+export async function getNewsPaginated(
+  page = 1,
+  pageSize = 20
+): Promise<PaginatedResult<DbTrendItem>> {
+  const [news, total] = await Promise.all([
+    prisma.trendNews.findMany({
+      orderBy: { pubDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.trendNews.count(),
+  ]);
+
+  return {
+    items: news.map((n) => ({
+      title: n.title,
+      link: n.link,
+      pubDate: n.pubDate.toISOString(),
+      source: n.source,
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+
+export async function clearAllTrends() {
+  await prisma.trendVideo.deleteMany({});
+  await prisma.trendNews.deleteMany({});
+  console.log("[DB] All trends cleared.");
+}
+
+// YouTube Channel Management
+export interface YouTubeChannelData {
+  channelId: string;
+  name: string;
+  category: "korean" | "global";
+}
+
+export async function getActiveChannels(): Promise<YouTubeChannelData[]> {
+  const channels = await prisma.youTubeChannel.findMany({
+    where: { active: true },
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+  });
+
+  return channels.map((c) => ({
+    channelId: c.channelId,
+    name: c.name,
+    category: c.category as "korean" | "global",
+  }));
+}
+
+export async function getChannelsByCategory(
+  category: "korean" | "global"
+): Promise<YouTubeChannelData[]> {
+  const channels = await prisma.youTubeChannel.findMany({
+    where: { active: true, category },
+    orderBy: { name: "asc" },
+  });
+
+  return channels.map((c) => ({
+    channelId: c.channelId,
+    name: c.name,
+    category: c.category as "korean" | "global",
+  }));
+}
+
+export async function addChannel(data: YouTubeChannelData): Promise<void> {
+  await prisma.youTubeChannel.upsert({
+    where: { channelId: data.channelId },
+    update: { name: data.name, category: data.category, active: true },
+    create: { channelId: data.channelId, name: data.name, category: data.category },
+  });
+}
+
+export async function removeChannel(channelId: string): Promise<void> {
+  await prisma.youTubeChannel.update({
+    where: { channelId },
+    data: { active: false },
+  });
+}
+
+export async function getAllChannels() {
+  return prisma.youTubeChannel.findMany({
+    orderBy: [{ category: "asc" }, { name: "asc" }],
+  });
+}
+
+// 비디오를 채널별로 그룹화해서 조회
+export async function getVideosBySource(limit = 5): Promise<Record<string, DbTrendItem[]>> {
+  const videos = await prisma.trendVideo.findMany({
+    orderBy: { pubDate: "desc" },
+    take: 100,
+  });
+
+  const grouped: Record<string, DbTrendItem[]> = {};
+  for (const v of videos) {
+    if (!grouped[v.source]) {
+      grouped[v.source] = [];
+    }
+    if (grouped[v.source].length < limit) {
+      grouped[v.source].push({
+        title: v.title,
+        link: v.link,
+        pubDate: v.pubDate.toISOString(),
+        source: v.source,
+        thumbnail: v.thumbnail ?? undefined,
+      });
+    }
+  }
+
+  return grouped;
 }

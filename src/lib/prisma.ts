@@ -18,4 +18,4 @@ export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
-export type { Post, Tag, Series, PostTag } from "../generated/prisma/client";
+export type { Post, Tag, Series, PostTag, TrendVideo, TrendNews, YouTubeChannel } from "../generated/prisma/client";
