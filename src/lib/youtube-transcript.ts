@@ -217,19 +217,23 @@ export async function getVideoInfo(videoId: string): Promise<{
     const html = await response.text();
 
     // JSON-LD에서 정보 추출
-    const ldMatch = html.match(/<script type="application\/ld\+json"[^>]*>(\{.*?"@type"\s*:\s*"VideoObject".*?\})<\/script>/s);
-    if (ldMatch) {
+    const ldRegex = /<script type="application\/ld\+json"[^>]*>([^<]+)<\/script>/g;
+    let ldMatch;
+    while ((ldMatch = ldRegex.exec(html)) !== null) {
       try {
-        const ld = JSON.parse(ldMatch[1]);
-        console.log(`[VideoInfo] Page: found JSON-LD for ${videoId}`);
-        return {
-          title: ld.name || "",
-          description: ld.description || "",
-          channelName: ld.author?.name || "",
-          duration: ld.duration || "",
-        };
+        const jsonData = JSON.parse(ldMatch[1]);
+        if (jsonData["@type"] === "VideoObject") {
+          console.log(`[VideoInfo] Page: found JSON-LD for ${videoId}`);
+          return {
+            title: jsonData.name || "",
+            description: jsonData.description || "",
+            channelName: jsonData.author?.name || "",
+            duration: jsonData.duration || "",
+          };
+        }
       } catch {
-        // JSON 파싱 실패시 계속
+        // JSON 파싱 실패시 다음 매치로
+        continue;
       }
     }
 
