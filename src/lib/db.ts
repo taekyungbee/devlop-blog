@@ -195,6 +195,17 @@ export async function clearAllTrends() {
   console.log("[DB] All trends cleared.");
 }
 
+/**
+ * 특정 날짜 이전의 비디오 삭제
+ */
+export async function deleteVideosBefore(date: Date): Promise<number> {
+  const result = await prisma.trendVideo.deleteMany({
+    where: { pubDate: { lt: date } },
+  });
+  console.log(`[DB] Deleted ${result.count} videos before ${date.toISOString()}`);
+  return result.count;
+}
+
 // YouTube Channel Management
 export interface YouTubeChannelData {
   channelId: string;
