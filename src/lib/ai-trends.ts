@@ -61,8 +61,13 @@ export async function seedChannels() {
     }
 }
 
-export async function updateAiTrends() {
-    console.log("[Scheduler] Starting AI Trends update...");
+/**
+ * AI Trends 업데이트
+ * @param options.initialLoad - true면 2025년 7월 이후 모든 영상 수집, false면 전일자만 수집
+ */
+export async function updateAiTrends(options?: { initialLoad?: boolean }) {
+    const isInitialLoad = options?.initialLoad ?? false;
+    console.log(`[Scheduler] Starting AI Trends update... (initialLoad: ${isInitialLoad})`);
 
     // 채널 시드 확인
     await seedChannels();
@@ -73,6 +78,22 @@ export async function updateAiTrends() {
     // DB에서 활성 채널 가져오기
     const channels = await getActiveChannels();
 
+    // 날짜 필터 설정
+    const now = new Date();
+    let cutoffDate: Date;
+
+    if (isInitialLoad) {
+        // 초기 로드: 2025년 7월 1일 이후
+        cutoffDate = new Date("2025-07-01T00:00:00Z");
+    } else {
+        // 일일 수집: 전일 00:00 기준
+        cutoffDate = new Date(now);
+        cutoffDate.setDate(cutoffDate.getDate() - 1);
+        cutoffDate.setHours(0, 0, 0, 0);
+    }
+
+    console.log(`[Scheduler] Cutoff date: ${cutoffDate.toISOString()}`);
+
     // 1. Fetch YouTube RSS (최신 영상)
     for (const channel of channels) {
         try {
@@ -80,9 +101,13 @@ export async function updateAiTrends() {
                 `https://www.youtube.com/feeds/videos.xml?channel_id=${channel.channelId}`
             );
 
-            feed.items.slice(0, 5).forEach((item) => {
+            // 전체 아이템 중 cutoffDate 이후만 필터링
+            feed.items.forEach((item) => {
                 const videoId = item.id?.replace("yt:video:", "") || "";
-                if (videoId) {
+                const pubDate = item.pubDate ? new Date(item.pubDate) : new Date();
+
+                // 날짜 필터: cutoffDate 이후인 항목만 수집
+                if (videoId && pubDate >= cutoffDate) {
                     videos.push({
                         title: item.title || "No Title",
                         link: item.link || `https://www.youtube.com/watch?v=${videoId}`,
