@@ -173,6 +173,8 @@ export async function getTranscript(videoId: string): Promise<string | null> {
 
 /**
  * 영상 정보 가져오기 (Gemini fallback용)
+ * 1차: youtubei.js
+ * 2차: 페이지 직접 파싱 (oEmbed + HTML)
  */
 export async function getVideoInfo(videoId: string): Promise<{
   title: string;
@@ -180,20 +182,75 @@ export async function getVideoInfo(videoId: string): Promise<{
   channelName: string;
   duration: string;
 } | null> {
+  // 1차: youtubei.js
   try {
     const yt = await getInnertube();
     const info = await yt.getBasicInfo(videoId);
-
     const details = info.basic_info;
 
-    return {
-      title: details.title || "",
-      description: details.short_description || "",
-      channelName: details.channel?.name || "",
-      duration: formatDuration(details.duration || 0),
-    };
+    if (details.title && details.short_description) {
+      return {
+        title: details.title || "",
+        description: details.short_description || "",
+        channelName: details.channel?.name || "",
+        duration: formatDuration(details.duration || 0),
+      };
+    }
   } catch (error) {
-    console.log(`[VideoInfo] Error for ${videoId}:`, error instanceof Error ? error.message : error);
+    console.log(`[VideoInfo] Innertube error for ${videoId}:`, error instanceof Error ? error.message : error);
+  }
+
+  // 2차: 페이지 직접 파싱
+  try {
+    const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
+    });
+
+    if (!response.ok) {
+      console.log(`[VideoInfo] Page fetch error ${response.status} for ${videoId}`);
+      return null;
+    }
+
+    const html = await response.text();
+
+    // JSON-LD에서 정보 추출
+    const ldMatch = html.match(/<script type="application\/ld\+json"[^>]*>(\{.*?"@type"\s*:\s*"VideoObject".*?\})<\/script>/s);
+    if (ldMatch) {
+      try {
+        const ld = JSON.parse(ldMatch[1]);
+        console.log(`[VideoInfo] Page: found JSON-LD for ${videoId}`);
+        return {
+          title: ld.name || "",
+          description: ld.description || "",
+          channelName: ld.author?.name || "",
+          duration: ld.duration || "",
+        };
+      } catch {
+        // JSON 파싱 실패시 계속
+      }
+    }
+
+    // meta 태그에서 정보 추출
+    const titleMatch = html.match(/<meta name="title" content="([^"]*)">/);
+    const descMatch = html.match(/<meta name="description" content="([^"]*)">/);
+    const channelMatch = html.match(/<link itemprop="name" content="([^"]*)">/);
+
+    if (titleMatch || descMatch) {
+      console.log(`[VideoInfo] Page: found meta tags for ${videoId}`);
+      return {
+        title: titleMatch?.[1] || "",
+        description: descMatch?.[1] || "",
+        channelName: channelMatch?.[1] || "",
+        duration: "",
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.log(`[VideoInfo] Page error for ${videoId}:`, error instanceof Error ? error.message : error);
     return null;
   }
 }

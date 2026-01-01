@@ -206,6 +206,22 @@ export async function deleteVideosBefore(date: Date): Promise<number> {
   return result.count;
 }
 
+/**
+ * 실패한 요약을 null로 리셋 (재시도용)
+ */
+export async function resetFailedSummaries(): Promise<number> {
+  const result = await prisma.trendVideo.updateMany({
+    where: {
+      summary: {
+        in: ["[요약 불가]", "[자막 없음]", "[요약 실패]", "[URL 파싱 실패]"],
+      },
+    },
+    data: { summary: null },
+  });
+  console.log(`[DB] Reset ${result.count} failed summaries`);
+  return result.count;
+}
+
 // YouTube Channel Management
 export interface YouTubeChannelData {
   channelId: string;
