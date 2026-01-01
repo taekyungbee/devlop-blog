@@ -53,7 +53,7 @@ jobs:
             --max-instances 3 \
             --add-cloudsql-instances=$PROJECT_ID:$REGION:toy-db \
             --set-env-vars "NODE_ENV=production" \
-            --set-env-vars "DATABASE_URL=postgresql://geng:blogdb2024@localhost/myapp?host=/cloudsql/$PROJECT_ID:$REGION:toy-db" \
+            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }}" \
             --set-env-vars "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
             --set-env-vars "NOTION_API_KEY=${{ secrets.NOTION_API_KEY }}" \
             --set-env-vars "NOTION_DATABASE_ID=${{ secrets.NOTION_DATABASE_ID }}" \
