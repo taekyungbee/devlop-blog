@@ -43,9 +43,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma client 복사
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+# Prisma client 복사 (src/generated/prisma에 생성됨)
+COPY --from=builder /app/src/generated/prisma ./src/generated/prisma
 
 USER nextjs
 
