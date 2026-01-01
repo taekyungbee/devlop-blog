@@ -1,14 +1,23 @@
-import { getAllPosts } from "@/lib/posts";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Search } from "@/components/search";
 
-export async function SearchWrapper() {
-  const posts = await getAllPosts();
+interface SearchablePost {
+  slug: string;
+  title: string;
+  description?: string | null;
+}
 
-  const searchablePosts = posts.map((post) => ({
-    slug: post.slug,
-    title: post.title,
-    description: post.description,
-  }));
+export function SearchWrapper() {
+  const [posts, setPosts] = useState<SearchablePost[]>([]);
 
-  return <Search posts={searchablePosts} />;
+  useEffect(() => {
+    fetch("/api/posts/search")
+      .then((res) => res.json())
+      .then((data) => setPosts(data))
+      .catch(() => setPosts([]));
+  }, []);
+
+  return <Search posts={posts} />;
 }

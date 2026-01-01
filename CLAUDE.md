@@ -4,27 +4,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-개발자 블로그 프로젝트 - Next.js 16, Velite, shadcn/ui 기반 개인/기술 블로그
+개발자 블로그 프로젝트 - Next.js 16, PostgreSQL, shadcn/ui 기반 개인/기술 블로그 + AI 트렌드 수집
 
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router, Turbopack)
 - **Language**: TypeScript 5.x
+- **Database**: PostgreSQL + Prisma ORM
 - **Styling**: Tailwind CSS 4.x + shadcn/ui
-- **Content**: Velite (MDX 기반 타입 안전 콘텐츠 관리)
-- **Code Highlighting**: shiki + rehype-pretty-code
-- **Theme**: next-themes (다크/라이트 모드)
-- **Comments**: Giscus (GitHub Discussions 기반)
-- **Search**: cmdk (Command palette)
+- **AI**: Gemini 3 Flash (YouTube 요약)
+- **Deployment**: Google Cloud Run (GitHub Actions CI/CD)
 
 ## Build Commands
 
 ```bash
-npm run dev          # 개발 서버 (velite watch + next dev)
-npm run build        # 프로덕션 빌드 (velite build + next build)
-npm run start        # 프로덕션 실행
-npm run lint         # 린트
-npm run type-check   # 타입 체크
+npm run dev          # 개발 서버 (localhost:7000)
+npm run build        # 프로덕션 빌드 (prisma generate + next build)
+npm run lint         # ESLint
+npm run type-check   # TypeScript 검사
+
+# Database
+npm run db:pull      # DB 스키마 → Prisma 동기화
+npm run db:generate  # Prisma Client 생성
+
+# Deployment
+npm run docker:build # Docker 이미지 빌드
+npm run deploy       # Cloud Run 배포 스크립트
 ```
 
 ## Architecture
@@ -33,87 +38,68 @@ npm run type-check   # 타입 체크
 
 | Route | Description |
 |-------|-------------|
-| `/` | 홈 (최근 포스트 5개) |
+| `/` | 홈 (최근 포스트 + AI 트렌드) |
 | `/posts` | 전체 포스트 목록 |
-| `/posts/[...slug]` | 포스트 상세 (MDX 렌더링 + 댓글) |
-| `/tags` | 전체 태그 목록 |
-| `/tags/[tag]` | 태그별 포스트 목록 |
-| `/about` | 소개 페이지 |
-| `/feed.xml` | RSS 피드 |
-| `/sitemap.xml` | 사이트맵 |
-| `/robots.txt` | robots.txt |
+| `/posts/[...slug]` | 포스트 상세 (MDX 렌더링 + Giscus 댓글) |
+| `/tags`, `/tags/[tag]` | 태그 목록/필터 |
+| `/trends` | AI 트렌드 전용 페이지 |
+| `/admin` | 관리자 페이지 |
 
-### Content System
+### API Endpoints
 
-- MDX 포스트: `content/posts/*.mdx`
-- Velite 빌드 결과: `.velite/` (gitignore)
-- 콘텐츠 import: `#site/content` 별칭
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/trends/refresh` | YouTube RSS 수집 → DB 저장 |
+| `POST /api/trends/summarize` | Gemini로 영상 요약 생성 |
+| `POST /api/trends/send-email` | 요약 이메일 발송 |
+| `POST /api/trends/sync-notion` | Notion DB 동기화 |
+| `GET /api/trends/videos` | 트렌드 영상 조회 |
+| `GET /api/channels` | YouTube 채널 목록 |
 
-```typescript
-import { posts } from "#site/content";
-```
-
-### MDX Frontmatter
-
-```yaml
----
-title: 포스트 제목 (필수)
-description: 포스트 설명 (선택)
-date: 2024-12-18 (필수, ISO 형식)
-tags: ["tag1", "tag2"] (선택)
-series: 시리즈명 (선택)
-published: true (기본값: true)
----
-```
-
-### Directory Structure
+### Database Schema (Prisma)
 
 ```
-src/
-├── app/
-│   ├── page.tsx              # 홈
-│   ├── posts/page.tsx        # 포스트 목록
-│   ├── posts/[...slug]/      # 포스트 상세
-│   ├── tags/page.tsx         # 태그 목록
-│   ├── tags/[tag]/           # 태그별 포스트
-│   ├── about/page.tsx        # 소개
-│   ├── feed.xml/route.ts     # RSS
-│   ├── sitemap.ts            # 사이트맵
-│   └── robots.ts             # robots.txt
-├── components/
-│   ├── ui/                   # shadcn/ui
-│   ├── mdx/                  # MDX 컴포넌트
-│   ├── layout/               # Header, Footer, ThemeToggle
-│   ├── post-card.tsx         # 포스트 카드
-│   ├── search.tsx            # 검색 (Cmd+K)
-│   └── giscus-comments.tsx   # 댓글
-├── config/site.ts            # 사이트 설정
-└── lib/utils.ts              # 유틸리티
+Post ─┬─ PostTag ─── Tag
+      └─ Series
 
-content/posts/                # MDX 포스트 파일
-velite.config.ts              # Velite 스키마
+TrendVideo (YouTube 영상 + Gemini 요약)
+TrendNews (AI 뉴스)
+YouTubeChannel (구독 채널 관리)
 ```
 
-### Key Utils (lib/utils.ts)
+### Key Libraries
 
-- `cn()` - Tailwind 클래스 병합
-- `formatDate()` - 한국어 날짜 포맷
-- `sortPosts()` - 최신순 정렬
-- `getAllTags()` - 태그 집계
-- `getPostsByTag()` - 태그별 필터
+| 파일 | 역할 |
+|------|------|
+| `lib/prisma.ts` | Prisma Client 싱글톤 |
+| `lib/posts.ts` | 블로그 포스트 CRUD |
+| `lib/ai-trends.ts` | 트렌드 데이터 조회 |
+| `lib/youtube-api.ts` | YouTube RSS 파싱 |
+| `lib/gemini-api.ts` | Gemini API 호출 |
+| `lib/video-summarizer.ts` | 영상 요약 파이프라인 |
+| `lib/email-trends.ts` | Nodemailer 이메일 |
+| `lib/notion-trends.ts` | Notion API 연동 |
 
-### MDX 커스텀 컴포넌트
+### Dynamic Rendering
 
-- `<Callout type="info|warning|danger|default">` - 알림 박스
-- `<Image>` - Next.js 이미지 최적화
+모든 DB 의존 페이지는 `export const dynamic = "force-dynamic"` 설정 (빌드 시 DB 연결 불필요)
 
-### Giscus 설정
+### Environment Variables
 
-`src/components/giscus-comments.tsx`에서 다음 값을 실제 값으로 변경:
-- `data-repo`: GitHub 저장소
-- `data-repo-id`: 저장소 ID
-- `data-category-id`: Discussions 카테고리 ID
+```env
+DATABASE_URL=postgresql://...
+GEMINI_API_KEY=...
+NOTION_API_KEY=...
+NOTION_DATABASE_ID=...
+NOTION_TRENDS_API_KEY=...
+NOTION_TRENDS_DB_ID=...
+GMAIL_USER=...
+GMAIL_APP_PASSWORD=...
+```
 
-## Future Roadmap
+## Deployment
 
-**Phase 3**: 뉴스레터 구독, 애널리틱스 (Umami), PWA 지원
+GitHub Actions로 `main`/`develop` 브랜치 푸시 시 자동 배포:
+1. Docker 이미지 빌드 (standalone 모드)
+2. GCR 푸시
+3. Cloud Run 배포 (asia-northeast3)
