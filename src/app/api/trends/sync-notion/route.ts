@@ -12,10 +12,7 @@ export async function POST() {
 
     const result = await syncRecentSummariesToNotion(50);
 
-    return NextResponse.json({
-      success: true,
-      ...result,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     console.error("[Sync Notion] Error:", error);
     return NextResponse.json(
