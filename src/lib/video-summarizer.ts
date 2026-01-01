@@ -4,8 +4,8 @@
  */
 
 import { prisma } from "./prisma";
-import { getTranscript, extractVideoId } from "./youtube-transcript";
-import { summarizeText, isGeminiConfigured } from "./gemini-api";
+import { getTranscript, extractVideoId, getVideoInfo } from "./youtube-transcript";
+import { summarizeText, summarizeFromVideoInfo, isGeminiConfigured } from "./gemini-api";
 
 interface VideoToSummarize {
   id: number;
@@ -49,22 +49,39 @@ export async function summarizeAndSaveVideo(
       return { success: false, error: "Invalid video URL" };
     }
 
-    // 1. 자막 추출
+    // 1. 자막 추출 시도
     const transcript = await getTranscript(videoId);
-    if (!transcript) {
-      // 자막 없으면 "자막 없음"으로 저장
-      await prisma.trendVideo.update({
-        where: { id: video.id },
-        data: { summary: "[자막 없음]" },
-      });
-      return { success: true, summary: "[자막 없음]" };
-    }
 
-    // 2. Gemini로 요약
-    const summary = await summarizeText(transcript, {
-      title: video.title,
-      language: /[가-힣]/.test(video.title) ? "ko" : "en",
-    });
+    let summary: string;
+
+    if (transcript) {
+      // 2A. 자막이 있으면 자막 기반 요약
+      console.log(`[Summarizer] Using transcript for ${videoId}`);
+      summary = await summarizeText(transcript, {
+        title: video.title,
+        language: /[가-힣]/.test(video.title) ? "ko" : "en",
+      });
+    } else {
+      // 2B. 자막 없으면 영상 정보로 Gemini fallback
+      console.log(`[Summarizer] No transcript, using video info fallback for ${videoId}`);
+      const videoInfo = await getVideoInfo(videoId);
+
+      if (!videoInfo || !videoInfo.description) {
+        // 영상 정보도 없으면 실패
+        await prisma.trendVideo.update({
+          where: { id: video.id },
+          data: { summary: "[요약 불가]" },
+        });
+        return { success: true, summary: "[요약 불가]" };
+      }
+
+      summary = await summarizeFromVideoInfo({
+        title: videoInfo.title || video.title,
+        description: videoInfo.description,
+        channelName: videoInfo.channelName || video.source,
+        duration: videoInfo.duration,
+      });
+    }
 
     // 3. DB 저장
     await prisma.trendVideo.update({

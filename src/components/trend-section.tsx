@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { AiTrends } from "@/lib/ai-trends";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 interface TrendSectionProps {
@@ -47,7 +47,7 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                                 rel="noopener noreferrer"
                                 className="group block"
                             >
-                                <Card className="flex overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20">
+                                <Card className="flex overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20 h-full">
                                     <div className="relative w-40 min-w-40 bg-muted">
                                         {video.thumbnail && (
                                             <Image
@@ -59,7 +59,7 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                                             />
                                         )}
                                     </div>
-                                    <div className="p-4 flex flex-col justify-between">
+                                    <div className="p-4 flex flex-col justify-between flex-1">
                                         <div>
                                             <h4 className="font-medium line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                                                 {video.title}
@@ -83,32 +83,37 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                     <h3 className="text-xl font-semibold flex items-center gap-2">
                         <span className="text-blue-500">📰</span> AI News
                     </h3>
-                    <Card className="bg-background/40 backdrop-blur border-muted/50">
-                        <CardContent className="p-0">
-                            <ul className="divide-y divide-border/50">
-                                {displayNews.map((item, i) => (
-                                    <li key={i}>
-                                        <a
-                                            href={item.link}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block p-4 hover:bg-muted/50 transition-colors"
-                                        >
-                                            <h4 className="font-medium hover:text-primary transition-colors line-clamp-2">
+                    <div className="grid gap-4">
+                        {displayNews.map((item, i) => (
+                            <a
+                                key={i}
+                                href={item.link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group block"
+                            >
+                                <Card className="flex overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20 h-full">
+                                    <div className="relative w-40 min-w-40 bg-muted/50 flex items-center justify-center">
+                                        <span className="text-3xl grayscale group-hover:grayscale-0 transition-all duration-300">📰</span>
+                                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <div className="p-4 flex flex-col justify-between flex-1">
+                                        <div>
+                                            <h4 className="font-medium line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                                                 {item.title}
                                             </h4>
-                                            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                                                <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal">
-                                                    {item.source}
-                                                </Badge>
-                                                <time>{new Date(item.pubDate).toLocaleDateString()}</time>
-                                            </div>
-                                        </a>
-                                    </li>
-                                ))}
-                            </ul>
-                        </CardContent>
-                    </Card>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {item.source}
+                                            </p>
+                                        </div>
+                                        <time className="text-xs text-muted-foreground mt-2">
+                                            {new Date(item.pubDate).toLocaleDateString()}
+                                        </time>
+                                    </div>
+                                </Card>
+                            </a>
+                        ))}
+                    </div>
                 </div>
             </div>
         </section>

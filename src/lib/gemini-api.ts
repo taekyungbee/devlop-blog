@@ -93,3 +93,57 @@ export async function summarizeVideoBatch(
 export function isGeminiConfigured(): boolean {
   return !!GEMINI_API_KEY;
 }
+
+/**
+ * 영상 정보만으로 요약 생성 (자막 없을 때 fallback)
+ */
+export async function summarizeFromVideoInfo(info: {
+  title: string;
+  description: string;
+  channelName: string;
+  duration: string;
+}): Promise<string> {
+  const ai = getGenAI();
+  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+  const language = /[가-힣]/.test(info.title) ? "ko" : "en";
+
+  const prompt = language === "ko"
+    ? `다음 유튜브 영상의 제목과 설명을 바탕으로 영상 내용을 추론하여 요약해주세요.
+
+영상 제목: ${info.title}
+채널명: ${info.channelName}
+영상 길이: ${info.duration}
+영상 설명:
+${info.description.slice(0, 2000)}
+
+다음 형식으로 작성해주세요:
+- 예상 주제 (1줄)
+- 예상 주요 내용 (3-5개 bullet point)
+- 시청 추천 대상 (1줄)
+
+※ 자막을 가져올 수 없어 영상 정보 기반으로 추론한 요약입니다.`
+    : `Based on the following YouTube video title and description, infer and summarize the video content.
+
+Video Title: ${info.title}
+Channel: ${info.channelName}
+Duration: ${info.duration}
+Description:
+${info.description.slice(0, 2000)}
+
+Format:
+- Expected topic (1 line)
+- Expected key points (3-5 bullet points)
+- Recommended audience (1 line)
+
+※ This is an inferred summary based on video info as captions were unavailable.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("[Gemini API] Video info summarization failed:", error);
+    throw error;
+  }
+}

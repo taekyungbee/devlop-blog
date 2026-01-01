@@ -1,12 +1,59 @@
 /**
  * YouTube Transcript Extraction
- * YouTube 페이지에서 직접 자막 추출
+ * 1차: youtubei.js로 자막 추출
+ * 2차: 페이지 직접 파싱 fallback
  */
 
+import { Innertube } from "youtubei.js";
+
+let innertube: Innertube | null = null;
+
+async function getInnertube(): Promise<Innertube> {
+  if (!innertube) {
+    innertube = await Innertube.create({
+      lang: "ko",
+      location: "KR",
+    });
+  }
+  return innertube;
+}
+
 /**
- * YouTube 페이지에서 자막 URL 추출
+ * youtubei.js로 자막 추출 (1차 시도)
  */
-async function getCaptionUrl(videoId: string): Promise<string | null> {
+async function getTranscriptViaInnertube(videoId: string): Promise<string | null> {
+  try {
+    const yt = await getInnertube();
+    const info = await yt.getInfo(videoId);
+
+    const transcriptInfo = await info.getTranscript();
+    if (!transcriptInfo?.transcript?.content?.body?.initial_segments) {
+      console.log(`[Transcript] No transcript via Innertube for ${videoId}`);
+      return null;
+    }
+
+    const segments = transcriptInfo.transcript.content.body.initial_segments;
+    const text = segments
+      .map((seg: { snippet?: { text?: string } }) => seg.snippet?.text || "")
+      .filter((t: string) => t.length > 0)
+      .join(" ");
+
+    if (text.length > 0) {
+      console.log(`[Transcript] Innertube: ${text.length} chars for ${videoId}`);
+      return text;
+    }
+
+    return null;
+  } catch (error) {
+    console.log(`[Transcript] Innertube error for ${videoId}:`, error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+/**
+ * 페이지 직접 파싱 (2차 fallback)
+ */
+async function getTranscriptViaPage(videoId: string): Promise<string | null> {
   try {
     const response = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
@@ -17,7 +64,7 @@ async function getCaptionUrl(videoId: string): Promise<string | null> {
     });
 
     if (!response.ok) {
-      console.log(`[Transcript] YouTube page error ${response.status} for ${videoId}`);
+      console.log(`[Transcript] Page fetch error ${response.status} for ${videoId}`);
       return null;
     }
 
@@ -26,7 +73,7 @@ async function getCaptionUrl(videoId: string): Promise<string | null> {
     // captionTracks JSON 추출
     const captionMatch = html.match(/"captionTracks":(\[.*?\])/);
     if (!captionMatch) {
-      console.log(`[Transcript] No caption tracks found for ${videoId}`);
+      console.log(`[Transcript] No caption tracks in page for ${videoId}`);
       return null;
     }
 
@@ -50,10 +97,32 @@ async function getCaptionUrl(videoId: string): Promise<string | null> {
       track = captionTracks[0];
     }
 
-    console.log(`[Transcript] Found ${track.languageCode} captions for ${videoId}`);
-    return track.baseUrl;
+    console.log(`[Transcript] Page: found ${track.languageCode} for ${videoId}`);
+
+    // 자막 XML 가져오기
+    const captionResponse = await fetch(track.baseUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept: "text/xml, application/xml, */*",
+      },
+    });
+
+    if (!captionResponse.ok) {
+      console.log(`[Transcript] Caption fetch error ${captionResponse.status} for ${videoId}`);
+      return null;
+    }
+
+    const xml = await captionResponse.text();
+    const transcript = parseTranscriptXml(xml);
+
+    if (transcript.length > 0) {
+      console.log(`[Transcript] Page: ${transcript.length} chars for ${videoId}`);
+      return transcript;
+    }
+
+    return null;
   } catch (error) {
-    console.log(`[Transcript] Error getting caption URL for ${videoId}:`, error);
+    console.log(`[Transcript] Page error for ${videoId}:`, error);
     return null;
   }
 }
@@ -87,61 +156,52 @@ function parseTranscriptXml(xml: string): string {
 }
 
 /**
- * 유튜브 영상 ID로 자막 추출
+ * 유튜브 영상 ID로 자막 추출 (통합)
+ * 1차: youtubei.js
+ * 2차: 페이지 직접 파싱
  */
 export async function getTranscript(videoId: string): Promise<string | null> {
+  // 1차: youtubei.js
+  const transcript = await getTranscriptViaInnertube(videoId);
+  if (transcript) {
+    return transcript;
+  }
+
+  // 2차: 페이지 직접 파싱
+  return getTranscriptViaPage(videoId);
+}
+
+/**
+ * 영상 정보 가져오기 (Gemini fallback용)
+ */
+export async function getVideoInfo(videoId: string): Promise<{
+  title: string;
+  description: string;
+  channelName: string;
+  duration: string;
+} | null> {
   try {
-    const captionUrl = await getCaptionUrl(videoId);
-    if (!captionUrl) {
-      return null;
-    }
+    const yt = await getInnertube();
+    const info = await yt.getBasicInfo(videoId);
 
-    const response = await fetch(captionUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept: "text/xml, application/xml, */*",
-      },
-    });
+    const details = info.basic_info;
 
-    if (!response.ok) {
-      console.log(`[Transcript] Caption fetch error ${response.status} for ${videoId}`);
-      return null;
-    }
-
-    const xml = await response.text();
-    const transcript = parseTranscriptXml(xml);
-
-    if (transcript.length > 0) {
-      console.log(`[Transcript] Got ${transcript.length} chars for ${videoId}`);
-      return transcript;
-    }
-
-    console.log(`[Transcript] Empty transcript for ${videoId}`);
-    return null;
+    return {
+      title: details.title || "",
+      description: details.short_description || "",
+      channelName: details.channel?.name || "",
+      duration: formatDuration(details.duration || 0),
+    };
   } catch (error) {
-    console.log(`[Transcript] Error for ${videoId}:`, error);
+    console.log(`[VideoInfo] Error for ${videoId}:`, error instanceof Error ? error.message : error);
     return null;
   }
 }
 
-/**
- * 여러 영상의 자막 일괄 추출
- */
-export async function getTranscriptBatch(
-  videoIds: string[]
-): Promise<Map<string, string | null>> {
-  const results = new Map<string, string | null>();
-
-  for (const videoId of videoIds) {
-    const transcript = await getTranscript(videoId);
-    results.set(videoId, transcript);
-
-    // Rate limit 방지
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-
-  return results;
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
 /**
