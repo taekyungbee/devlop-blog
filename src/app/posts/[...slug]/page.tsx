@@ -1,4 +1,4 @@
-import { posts } from "#site/content";
+import { getAllPosts, getPostBySlugParams } from "@/lib/posts";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { siteConfig } from "@/config/site";
@@ -17,7 +17,7 @@ interface PostPageProps {
 async function getPostFromParams(params: PostPageProps["params"]) {
   const { slug } = await params;
   const slugStr = slug?.join("/");
-  const post = posts.find((post) => post.slugAsParams === slugStr);
+  const post = await getPostBySlugParams(slugStr);
   return post;
 }
 
@@ -35,19 +35,20 @@ export async function generateMetadata({
     description: post.description,
     openGraph: {
       title: post.title,
-      description: post.description,
+      description: post.description ?? undefined,
       type: "article",
       url: `${siteConfig.url}/${post.slug}`,
     },
     twitter: {
       card: "summary_large_image",
       title: post.title,
-      description: post.description,
+      description: post.description ?? undefined,
     },
   };
 }
 
 export async function generateStaticParams() {
+  const posts = await getAllPosts();
   return posts.map((post) => ({
     slug: post.slugAsParams.split("/"),
   }));
@@ -82,7 +83,7 @@ export default async function PostPage({ params }: PostPageProps) {
       </div>
       <hr className="my-8" />
       <div className="prose prose-neutral dark:prose-invert max-w-none">
-        <MDXContent code={post.body} />
+        <MDXContent content={post.content} />
       </div>
       <hr className="my-8" />
       <GiscusComments />

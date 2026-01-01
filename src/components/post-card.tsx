@@ -12,7 +12,7 @@ import {
 interface PostCardProps {
   slug: string;
   title: string;
-  description?: string;
+  description?: string | null;
   date: string;
   tags?: string[];
 }

@@ -1,6 +1,5 @@
-import { posts } from "#site/content";
 import { PostCard } from "@/components/post-card";
-import { getAllTags, getPostsByTag, sortPosts } from "@/lib/utils";
+import { getAllTags, getPostsByTag } from "@/lib/posts";
 import { Metadata } from "next";
 
 interface TagPageProps {
@@ -21,7 +20,7 @@ export async function generateMetadata({
 }
 
 export async function generateStaticParams() {
-  const tags = getAllTags(posts);
+  const tags = await getAllTags();
   return Object.keys(tags).map((tag) => ({
     tag: tag,
   }));
@@ -30,7 +29,7 @@ export async function generateStaticParams() {
 export default async function TagPage({ params }: TagPageProps) {
   const { tag } = await params;
   const decodedTag = decodeURIComponent(tag);
-  const tagPosts = sortPosts(getPostsByTag(posts, decodedTag));
+  const tagPosts = await getPostsByTag(decodedTag);
 
   return (
     <div className="container max-w-4xl py-6 lg:py-10">

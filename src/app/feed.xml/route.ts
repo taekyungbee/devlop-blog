@@ -1,10 +1,8 @@
-import { posts } from "#site/content";
+import { getAllPosts } from "@/lib/posts";
 import { siteConfig } from "@/config/site";
 
 export async function GET() {
-  const publishedPosts = posts
-    .filter((post) => post.published)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const posts = await getAllPosts();
 
   const feed = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
@@ -15,7 +13,7 @@ export async function GET() {
     <language>ko</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${siteConfig.url}/feed.xml" rel="self" type="application/rss+xml"/>
-    ${publishedPosts
+    ${posts
       .map(
         (post) => `
     <item>

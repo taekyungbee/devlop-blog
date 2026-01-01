@@ -1,13 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { posts } from "#site/content";
+import { getLatestPosts } from "@/lib/posts";
 import { PostCard } from "@/components/post-card";
-import { sortPosts } from "@/lib/utils";
 import { getAiTrends } from "@/lib/ai-trends";
 import { TrendSection } from "@/components/trend-section";
 
 export default async function Home() {
-  const latestPosts = sortPosts(posts.filter((post) => post.published)).slice(0, 6);
+  const latestPosts = await getLatestPosts(6);
   const aiTrends = await getAiTrends();
 
   return (

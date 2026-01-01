@@ -1,16 +1,16 @@
-import { posts } from "#site/content";
+import { getAllPosts } from "@/lib/posts";
 import { siteConfig } from "@/config/site";
 import { MetadataRoute } from "next";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const publishedPosts = posts
-    .filter((post) => post.published)
-    .map((post) => ({
-      url: `${siteConfig.url}/${post.slug}`,
-      lastModified: new Date(post.date),
-      changeFrequency: "monthly" as const,
-      priority: 0.8,
-    }));
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const posts = await getAllPosts();
+
+  const publishedPosts = posts.map((post) => ({
+    url: `${siteConfig.url}/${post.slug}`,
+    lastModified: new Date(post.date),
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+  }));
 
   const routes = ["", "/posts", "/tags", "/about"].map((route) => ({
     url: `${siteConfig.url}${route}`,

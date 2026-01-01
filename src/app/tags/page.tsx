@@ -1,5 +1,4 @@
-import { posts } from "#site/content";
-import { getAllTags } from "@/lib/utils";
+import { getAllTags } from "@/lib/posts";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
@@ -8,8 +7,8 @@ export const metadata = {
   description: "모든 태그 목록입니다.",
 };
 
-export default function TagsPage() {
-  const tags = getAllTags(posts);
+export default async function TagsPage() {
+  const tags = await getAllTags();
   const sortedTags = Object.entries(tags).sort((a, b) => b[1] - a[1]);
 
   return (

@@ -1,14 +1,14 @@
-import { posts } from "#site/content";
+import { getAllPosts } from "@/lib/posts";
 import { Search } from "@/components/search";
 
-export function SearchWrapper() {
-  const searchablePosts = posts
-    .filter((post) => post.published)
-    .map((post) => ({
-      slug: post.slug,
-      title: post.title,
-      description: post.description,
-    }));
+export async function SearchWrapper() {
+  const posts = await getAllPosts();
+
+  const searchablePosts = posts.map((post) => ({
+    slug: post.slug,
+    title: post.title,
+    description: post.description,
+  }));
 
   return <Search posts={searchablePosts} />;
 }

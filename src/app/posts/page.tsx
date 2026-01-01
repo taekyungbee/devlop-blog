@@ -1,14 +1,13 @@
-import { posts } from "#site/content";
+import { getAllPosts } from "@/lib/posts";
 import { PostCard } from "@/components/post-card";
-import { sortPosts } from "@/lib/utils";
 
 export const metadata = {
   title: "Posts",
   description: "모든 블로그 포스트 목록입니다.",
 };
 
-export default function PostsPage() {
-  const sortedPosts = sortPosts(posts.filter((post) => post.published));
+export default async function PostsPage() {
+  const sortedPosts = await getAllPosts();
 
   return (
     <div className="container max-w-4xl py-6 lg:py-10">

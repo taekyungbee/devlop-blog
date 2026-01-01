@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 interface SearchablePost {
   slug: string;
   title: string;
-  description?: string;
+  description?: string | null;
 }
 
 interface SearchProps {
