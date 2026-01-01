@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getTranscript, extractVideoId } from "@/lib/youtube-transcript";
+import { isGeminiConfigured } from "@/lib/gemini-api";
+import { summarizeAndSaveVideo } from "@/lib/video-summarizer";
+import { extractVideoId } from "@/lib/youtube-transcript";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -41,37 +42,13 @@ export async function GET() {
   }
 }
 
-// Gemini로 요약
-async function summarizeWithGemini(text: string, title: string): Promise<string> {
-  const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
-  const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-
-  const isKorean = /[가-힣]/.test(title);
-  const prompt = isKorean
-    ? `다음 유튜브 영상 자막을 300자 이내로 요약해주세요.
-제목: ${title}
-
-핵심 내용만 간결하게 정리해주세요.
-
-자막:
-${text.slice(0, 10000)}`
-    : `Summarize this YouTube video transcript in 300 characters or less.
-Title: ${title}
-
-Transcript:
-${text.slice(0, 10000)}`;
-
-  const result = await model.generateContent(prompt);
-  return result.response.text();
-}
-
 /**
  * POST /api/trends/summarize
- * 영상 요약 실행
+ * 영상 요약 실행 (자막 → Gemini fallback)
  */
 export async function POST(request: NextRequest) {
   try {
-    if (!GEMINI_API_KEY) {
+    if (!isGeminiConfigured()) {
       return NextResponse.json(
         { error: "Gemini API not configured" },
         { status: 500 }
@@ -88,7 +65,7 @@ export async function POST(request: NextRequest) {
       select: { id: true, title: true, link: true, source: true },
     });
 
-    const results: { title: string; status: string }[] = [];
+    const results: { title: string; status: string; summary?: string }[] = [];
 
     for (const video of videos) {
       try {
@@ -102,20 +79,21 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        const transcript = await getTranscript(videoId);
-        if (!transcript) {
-          // 자막 없음으로 표시하되, 나중에 재시도할 수 있도록 null로 유지
-          // 일부 영상은 rate limit으로 인해 임시로 실패할 수 있음
-          results.push({ title: video.title, status: "no_transcript_or_rate_limited" });
-          continue;
-        }
+        // summarizeAndSaveVideo 사용 (자막 → Gemini fallback 포함)
+        const result = await summarizeAndSaveVideo(video);
 
-        const summary = await summarizeWithGemini(transcript, video.title);
-        await prisma.trendVideo.update({
-          where: { id: video.id },
-          data: { summary },
-        });
-        results.push({ title: video.title, status: "success" });
+        if (result.success) {
+          results.push({
+            title: video.title,
+            status: "success",
+            summary: result.summary?.slice(0, 100),
+          });
+        } else {
+          results.push({
+            title: video.title,
+            status: `error: ${result.error}`,
+          });
+        }
 
         // Rate limit (분당 15회)
         await new Promise((r) => setTimeout(r, 4500));
