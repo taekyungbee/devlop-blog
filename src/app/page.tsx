@@ -5,6 +5,9 @@ import { PostCard } from "@/components/post-card";
 import { getAiTrends } from "@/lib/ai-trends";
 import { TrendSection } from "@/components/trend-section";
 
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
+
 export default async function Home() {
   const latestPosts = await getLatestPosts(6);
   const aiTrends = await getAiTrends();

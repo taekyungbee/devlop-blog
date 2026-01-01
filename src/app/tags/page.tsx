@@ -2,6 +2,9 @@ import { getAllTags } from "@/lib/posts";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Tags",
   description: "모든 태그 목록입니다.",

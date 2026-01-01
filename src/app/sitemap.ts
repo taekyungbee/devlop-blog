@@ -2,6 +2,9 @@ import { getAllPosts } from "@/lib/posts";
 import { siteConfig } from "@/config/site";
 import { MetadataRoute } from "next";
 
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const posts = await getAllPosts();
 

@@ -1,6 +1,9 @@
 import { PostCard } from "@/components/post-card";
-import { getAllTags, getPostsByTag } from "@/lib/posts";
+import { getPostsByTag } from "@/lib/posts";
 import { Metadata } from "next";
+
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
 
 interface TagPageProps {
   params: Promise<{
@@ -17,13 +20,6 @@ export async function generateMetadata({
     title: `#${decodedTag}`,
     description: `${decodedTag} 태그가 포함된 포스트 목록입니다.`,
   };
-}
-
-export async function generateStaticParams() {
-  const tags = await getAllTags();
-  return Object.keys(tags).map((tag) => ({
-    tag: tag,
-  }));
 }
 
 export default async function TagPage({ params }: TagPageProps) {

@@ -1,4 +1,4 @@
-import { getAllPosts, getPostBySlugParams } from "@/lib/posts";
+import { getPostBySlugParams } from "@/lib/posts";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { siteConfig } from "@/config/site";
@@ -7,6 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { MDXContent } from "@/components/mdx/mdx-content";
 import { GiscusComments } from "@/components/giscus-comments";
 import Link from "next/link";
+
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
 
 interface PostPageProps {
   params: Promise<{
@@ -45,13 +48,6 @@ export async function generateMetadata({
       description: post.description ?? undefined,
     },
   };
-}
-
-export async function generateStaticParams() {
-  const posts = await getAllPosts();
-  return posts.map((post) => ({
-    slug: post.slugAsParams.split("/"),
-  }));
 }
 
 export default async function PostPage({ params }: PostPageProps) {

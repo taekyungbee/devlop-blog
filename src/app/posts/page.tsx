@@ -1,6 +1,9 @@
 import { getAllPosts } from "@/lib/posts";
 import { PostCard } from "@/components/post-card";
 
+// 빌드 시 DB 연결 없이 동적 렌더링
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Posts",
   description: "모든 블로그 포스트 목록입니다.",
