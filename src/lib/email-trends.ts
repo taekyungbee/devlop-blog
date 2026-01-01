@@ -96,25 +96,26 @@ function generateEmailHtml(videos: SummaryVideo[], date: string): string {
 }
 
 /**
- * 최근 요약된 영상을 이메일로 발송
+ * 아직 발송하지 않은 요약된 영상을 이메일로 발송
  */
-export async function sendTrendsSummaryEmail(limit: number = 10): Promise<boolean> {
+export async function sendTrendsSummaryEmail(): Promise<boolean> {
   if (!isEmailConfigured()) {
     console.warn("[Email] Not configured");
     return false;
   }
 
-  // 최근 요약된 영상 조회
+  // 아직 이메일 발송하지 않은 요약된 영상 조회
   const videos = await prisma.trendVideo.findMany({
     where: {
+      emailSent: false,
       summary: {
         not: null,
-        notIn: ["[자막 없음]", "[URL 파싱 실패]", "[요약 실패]"],
+        notIn: ["[자막 없음]", "[URL 파싱 실패]", "[요약 실패]", "[요약 불가]"],
       },
     },
     orderBy: { pubDate: "desc" },
-    take: limit,
     select: {
+      id: true,
       title: true,
       link: true,
       source: true,
@@ -123,17 +124,44 @@ export async function sendTrendsSummaryEmail(limit: number = 10): Promise<boolea
     },
   });
 
-  if (videos.length === 0) {
-    console.log("[Email] No videos to send");
-    return true;
-  }
-
   const today = new Date();
   const dateStr = today.toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+
+  // 발송할 영상이 없으면 "새 영상 없음" 메일 발송
+  if (videos.length === 0) {
+    console.log("[Email] No new videos to send");
+    try {
+      const transport = getTransporter();
+      await transport.sendMail({
+        from: `"AI Trends" <${GMAIL_USER}>`,
+        to: GMAIL_USER,
+        subject: `🤖 AI Trends Daily - ${dateStr} (새 영상 없음)`,
+        html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <div style="text-align: center; margin-bottom: 32px;">
+    <h1 style="color: #333; font-size: 24px; margin: 0;">🤖 AI Trends Daily</h1>
+    <p style="color: #666; font-size: 14px; margin: 8px 0 0 0;">${dateStr}</p>
+  </div>
+  <div style="padding: 24px; background: #f9f9f9; border-radius: 8px; text-align: center;">
+    <p style="color: #666; font-size: 16px; margin: 0;">오늘은 새로 요약된 영상이 없습니다.</p>
+  </div>
+</body>
+</html>
+        `,
+      });
+      console.log("[Email] Sent 'no new videos' email");
+      return true;
+    } catch (error) {
+      console.error("[Email] Failed to send:", error);
+      return false;
+    }
+  }
 
   try {
     const transport = getTransporter();
@@ -146,6 +174,14 @@ export async function sendTrendsSummaryEmail(limit: number = 10): Promise<boolea
         videos.map((v) => ({ ...v, summary: v.summary! })),
         dateStr
       ),
+    });
+
+    // 발송 완료된 영상 업데이트
+    await prisma.trendVideo.updateMany({
+      where: {
+        id: { in: videos.map((v) => v.id) },
+      },
+      data: { emailSent: true },
     });
 
     console.log(`[Email] Sent summary email with ${videos.length} videos`);

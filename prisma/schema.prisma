@@ -68,9 +68,11 @@ model TrendVideo {
   source    String   @db.VarChar(100)
   thumbnail String?  @db.VarChar(1000)
   summary   String?  @db.Text
+  emailSent Boolean  @default(false) @map("email_sent")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([pubDate(sort: Desc)], map: "idx_trend_videos_pub_date")
+  @@index([emailSent], map: "idx_trend_videos_email_sent")
   @@map("trend_videos")
 }
 
