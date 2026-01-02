@@ -9,27 +9,33 @@ import { TrendSection } from "@/components/trend-section";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const latestPosts = await getLatestPosts(6);
+  const latestPosts = getLatestPosts(6);
   const aiTrends = await getAiTrends();
 
   return (
     <div className="container max-w-6xl py-10 lg:py-16 space-y-16">
-      <section className="flex flex-col items-center text-center space-y-6">
-        <div className="relative w-32 h-32 md:w-40 md:h-40 animate-blob hover:scale-110 transition-transform duration-500">
-          <Image
-            src="/nano-banana.png"
-            alt="Nano Banana Mascot"
-            fill
-            className="object-contain drop-shadow-[0_0_15px_rgba(139,92,246,0.6)]"
-            priority
-          />
+      <section className="relative w-full h-[400px] md:h-[500px] rounded-3xl overflow-hidden flex flex-col items-center justify-center text-center space-y-6 shadow-2xl border border-white/20 group">
+        <Image
+          src="/hero-bg-lazybee.png"
+          alt="AI Dev Lab Hero Background"
+          fill
+          className="object-cover transition-transform duration-1000 group-hover:scale-105"
+          priority
+        />
+        <div className="absolute inset-0 bg-white/5 dark:bg-black/20 backdrop-blur-[1px]" />
+
+        {/* Text Content - No Box, Just Text */}
+        <div className="relative z-10 flex flex-col items-center gap-2 mt-40 md:mt-48 transition-transform hover:-translate-y-1 duration-300">
+          <h1 className="text-4xl md:text-6xl font-black tracking-tighter text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            AI Dev Lab
+          </h1>
+          <p className="text-lg md:text-2xl font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
+            by <span className="text-yellow-300">lazybee</span>
+          </p>
+          <p className="mt-2 text-sm md:text-base font-medium text-white/90 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
+            AI와 함께, 더 가치 있는 일에 몰입합니다.
+          </p>
         </div>
-        <h1 className="text-5xl md:text-7xl font-black tracking-tighter bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 bg-clip-text text-transparent animate-in fade-in slide-in-from-bottom-4 duration-1000">
-          Dev Blog
-        </h1>
-        <p className="text-xl md:text-2xl text-muted-foreground max-w-[700px] animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-200">
-          탐험하고, 배우고, 기록하는 개발자의 여정
-        </p>
       </section>
 
       <div className="border-t border-border/40" />
@@ -63,6 +69,7 @@ export default async function Home() {
                   title={post.title}
                   description={post.description}
                   date={post.date}
+                  category={post.category ?? undefined}
                   tags={post.tags}
                 />
               </li>

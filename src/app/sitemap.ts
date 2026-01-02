@@ -1,12 +1,10 @@
 import { getAllPosts } from "@/lib/posts";
 import { siteConfig } from "@/config/site";
 import { MetadataRoute } from "next";
+import { projects } from "#site/content";
 
-// 빌드 시 DB 연결 없이 동적 렌더링
-export const dynamic = "force-dynamic";
-
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const posts = await getAllPosts();
+export default function sitemap(): MetadataRoute.Sitemap {
+  const posts = getAllPosts();
 
   const publishedPosts = posts.map((post) => ({
     url: `${siteConfig.url}/${post.slug}`,
@@ -15,12 +13,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  const routes = ["", "/posts", "/tags", "/about"].map((route) => ({
+  const projectPages = projects.map((project) => ({
+    url: `${siteConfig.url}/${project.slug}`,
+    lastModified: new Date(),
+    changeFrequency: "monthly" as const,
+    priority: 0.7,
+  }));
+
+  const routes = ["", "/posts", "/projects", "/trends", "/tags", "/about"].map((route) => ({
     url: `${siteConfig.url}${route}`,
     lastModified: new Date(),
     changeFrequency: "weekly" as const,
     priority: route === "" ? 1 : 0.8,
   }));
 
-  return [...routes, ...publishedPosts];
+  return [...routes, ...publishedPosts, ...projectPages];
 }

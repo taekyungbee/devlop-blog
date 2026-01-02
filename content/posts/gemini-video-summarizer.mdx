@@ -1,0 +1,172 @@
+---
+title: Gemini API로 YouTube 영상 자동 요약 시스템 만들기
+description: YouTube 26개 AI 채널의 영상을 자동으로 수집하고 Gemini API로 요약하는 시스템을 구축한 경험을 공유합니다.
+date: 2025-01-03
+category: ai
+tags: ["gemini", "ai", "youtube", "automation", "typescript"]
+published: true
+---
+
+## 왜 만들었나?
+
+AI 분야는 하루가 다르게 변화합니다. OpenAI, Google, Anthropic 등 주요 기업들의 발표를 놓치지 않으려면 수십 개의 YouTube 채널을 구독하고 매일 확인해야 합니다.
+
+하지만 현실적으로 모든 영상을 시청할 시간은 없습니다. 그래서 **영상을 자동으로 수집하고, AI로 요약해서, 이메일로 받아보는 시스템**을 만들었습니다.
+
+## 시스템 아키텍처
+
+```
+YouTube RSS Feed (26개 채널)
+        ↓
+    수집 (Node.js)
+        ↓
+    자막 추출 (youtube-transcript)
+        ↓
+    요약 생성 (Gemini API)
+        ↓
+    DB 저장 (PostgreSQL + Prisma)
+        ↓
+    이메일 발송 / Notion 동기화
+```
+
+## 핵심 구현
+
+### 1. YouTube RSS로 영상 수집
+
+YouTube는 각 채널마다 RSS 피드를 제공합니다. 별도의 API 키 없이도 최신 영상 정보를 가져올 수 있습니다.
+
+```typescript
+// 채널 RSS URL 형식
+const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+
+// RSS 파싱 후 DB 저장
+const videos = await parseRssFeed(rssUrl);
+await prisma.trendVideo.createMany({
+  data: videos,
+  skipDuplicates: true, // 중복 방지
+});
+```
+
+현재 구독 중인 채널들:
+- **공식 채널**: Google DeepMind, OpenAI, Anthropic
+- **뉴스/리뷰**: AI Explained, Two Minute Papers, Fireship
+- **한국어**: 테디노트, AI 코리아 커뮤니티
+
+### 2. Gemini API로 요약 생성
+
+Google의 Gemini API는 무료 티어에서도 분당 15회 요청이 가능합니다. 긴 자막도 잘 처리하는 편이라 YouTube 영상 요약에 적합합니다.
+
+```typescript
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+
+async function summarizeTranscript(transcript: string, title: string) {
+  const prompt = `다음 유튜브 영상 자막을 500자 이내로 요약해주세요.
+
+영상 제목: ${title}
+
+[출력 형식]
+(핵심 주제 1줄)
+(주요 내용 3-5개 bullet point)
+(결론/시사점 1줄)
+
+자막:
+${transcript.slice(0, 15000)}`;
+
+  const result = await model.generateContent(prompt);
+  return result.response.text();
+}
+```
+
+### 3. 자막 없는 영상 처리 (Fallback 전략)
+
+모든 영상에 자막이 있는 것은 아닙니다. 자막이 없는 경우를 위한 대체 전략을 구현했습니다.
+
+```typescript
+async function summarizeVideo(video: Video) {
+  // 1차: 자막 추출 시도
+  const transcript = await getTranscript(video.id);
+
+  if (transcript) {
+    return summarizeTranscript(transcript, video.title);
+  }
+
+  // 2차: 오디오 분석 (yt-dlp + Gemini)
+  const audioSummary = await summarizeFromAudio(video.id);
+
+  if (audioSummary) {
+    return audioSummary;
+  }
+
+  // 3차: 영상 설명으로 fallback
+  const videoInfo = await getVideoInfo(video.id);
+  return summarizeFromDescription(videoInfo);
+}
+```
+
+### 4. Rate Limit 처리
+
+Gemini 무료 티어는 분당 15회 제한이 있습니다. 안정적인 배치 처리를 위해 요청 간 딜레이를 추가했습니다.
+
+```typescript
+async function summarizeBatch(videos: Video[]) {
+  for (const video of videos) {
+    await summarizeAndSave(video);
+
+    // 4.5초 간격 = 분당 약 13회 (여유 확보)
+    await new Promise(r => setTimeout(r, 4500));
+  }
+}
+```
+
+## 결과물
+
+### AI Trends 페이지
+
+수집된 영상들은 블로그의 `/trends` 페이지에서 확인할 수 있습니다. 각 영상 카드에는:
+- 썸네일
+- 제목 및 채널명
+- AI가 생성한 한국어 요약
+- 원본 영상 링크
+
+### 이메일 뉴스레터
+
+매일 아침 자동으로 전날의 주요 AI 영상 요약을 이메일로 발송합니다.
+
+```typescript
+// 매일 오전 9시 실행 (Cloud Scheduler)
+await sendDailyDigest({
+  to: subscriberEmails,
+  subject: `[AI Dev Lab] ${formatDate(today)} AI 트렌드`,
+  videos: todaySummaries,
+});
+```
+
+## 배운 점
+
+### 1. 프롬프트 엔지니어링의 중요성
+
+처음에는 단순히 "요약해줘"라고 했지만, 결과물이 들쭉날쭉했습니다. 출력 형식을 명확히 지정하고, 라벨 없이 내용만 출력하도록 지시하니 일관된 품질을 얻을 수 있었습니다.
+
+### 2. Fallback 전략 필수
+
+모든 영상에 자막이 있을 거라 가정하면 안 됩니다. 특히 새로 업로드된 영상은 자막 생성에 시간이 걸리기도 합니다. 여러 단계의 fallback을 준비해두면 안정성이 크게 향상됩니다.
+
+### 3. 무료 티어로도 충분
+
+Gemini API 무료 티어로도 하루 수십 개 영상 요약이 가능합니다. 사이드 프로젝트 수준에서는 비용 걱정 없이 사용할 수 있습니다.
+
+## 다음 단계
+
+- [ ] 요약 품질 피드백 시스템 (좋아요/싫어요)
+- [ ] 관심 키워드 기반 필터링
+- [ ] 주간 하이라이트 자동 생성
+- [ ] Slack 알림 연동
+
+<Callout type="info">
+  이 시스템의 전체 코드는 이 블로그의 GitHub 저장소에서 확인할 수 있습니다.
+</Callout>
+
+AI가 AI 콘텐츠를 요약해주는 아이러니한 상황이지만, 덕분에 최신 트렌드를 놓치지 않고 따라갈 수 있게 되었습니다.

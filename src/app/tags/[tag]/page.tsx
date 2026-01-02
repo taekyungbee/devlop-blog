@@ -1,14 +1,18 @@
 import { PostCard } from "@/components/post-card";
-import { getPostsByTag } from "@/lib/posts";
+import { getPostsByTag, getAllTags } from "@/lib/posts";
 import { Metadata } from "next";
-
-// 빌드 시 DB 연결 없이 동적 렌더링
-export const dynamic = "force-dynamic";
 
 interface TagPageProps {
   params: Promise<{
     tag: string;
   }>;
+}
+
+export function generateStaticParams() {
+  const tags = getAllTags();
+  return Object.keys(tags).map((tag) => ({
+    tag: tag,
+  }));
 }
 
 export async function generateMetadata({
@@ -25,7 +29,7 @@ export async function generateMetadata({
 export default async function TagPage({ params }: TagPageProps) {
   const { tag } = await params;
   const decodedTag = decodeURIComponent(tag);
-  const tagPosts = await getPostsByTag(decodedTag);
+  const tagPosts = getPostsByTag(decodedTag);
 
   return (
     <div className="container max-w-4xl py-6 lg:py-10">
@@ -49,6 +53,7 @@ export default async function TagPage({ params }: TagPageProps) {
                 title={post.title}
                 description={post.description}
                 date={post.date}
+                category={post.category ?? undefined}
                 tags={post.tags}
               />
             </li>

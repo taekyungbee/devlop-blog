@@ -1,4 +1,4 @@
-import { getPostBySlugParams } from "@/lib/posts";
+import { getRawPost, getAllRawPosts } from "@/lib/posts";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { siteConfig } from "@/config/site";
@@ -7,9 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { MDXContent } from "@/components/mdx/mdx-content";
 import { GiscusComments } from "@/components/giscus-comments";
 import Link from "next/link";
-
-// 빌드 시 DB 연결 없이 동적 렌더링
-export const dynamic = "force-dynamic";
 
 interface PostPageProps {
   params: Promise<{
@@ -20,8 +17,15 @@ interface PostPageProps {
 async function getPostFromParams(params: PostPageProps["params"]) {
   const { slug } = await params;
   const slugStr = slug?.join("/");
-  const post = await getPostBySlugParams(slugStr);
+  const post = getRawPost(slugStr);
   return post;
+}
+
+export function generateStaticParams() {
+  const posts = getAllRawPosts();
+  return posts.map((post) => ({
+    slug: post.slugAsParams.split("/"),
+  }));
 }
 
 export async function generateMetadata({
@@ -62,6 +66,12 @@ export default async function PostPage({ params }: PostPageProps) {
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <time dateTime={post.date}>{formatDate(post.date)}</time>
+          {post.category && (
+            <>
+              <span>•</span>
+              <Badge variant="outline">{post.category}</Badge>
+            </>
+          )}
         </div>
         <h1 className="font-bold text-4xl lg:text-5xl">{post.title}</h1>
         {post.description && (
@@ -79,7 +89,7 @@ export default async function PostPage({ params }: PostPageProps) {
       </div>
       <hr className="my-8" />
       <div className="prose prose-neutral dark:prose-invert max-w-none">
-        <MDXContent content={post.content} />
+        <MDXContent code={post.body} />
       </div>
       <hr className="my-8" />
       <GiscusComments />

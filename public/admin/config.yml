@@ -2,7 +2,7 @@ backend:
   name: github
   repo: taekyungbee/devlop-blog
   branch: develop
-  base_url: http://34.64.105.235
+  base_url: https://develop-blog-wnzgfqxu3a-du.a.run.app
   auth_endpoint: /api/auth
 
 media_folder: public/images/posts
@@ -21,6 +21,7 @@ collections:
       - { label: "Slug", name: "slug", widget: "string", pattern: ['^[a-z0-9-]+$', "영문 소문자, 숫자, 하이픈만 가능"] }
       - { label: "Description", name: "description", widget: "string", required: false }
       - { label: "Date", name: "date", widget: "datetime", format: "YYYY-MM-DD" }
+      - { label: "Category", name: "category", widget: "select", options: ["ai", "backend", "frontend", "devops", "project"], required: false }
       - { label: "Tags", name: "tags", widget: "list", required: false }
       - { label: "Published", name: "published", widget: "boolean", default: true }
       - { label: "Body", name: "body", widget: "markdown" }

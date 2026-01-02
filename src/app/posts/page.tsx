@@ -1,16 +1,13 @@
 import { getAllPosts } from "@/lib/posts";
 import { PostCard } from "@/components/post-card";
 
-// 빌드 시 DB 연결 없이 동적 렌더링
-export const dynamic = "force-dynamic";
-
 export const metadata = {
   title: "Posts",
   description: "모든 블로그 포스트 목록입니다.",
 };
 
-export default async function PostsPage() {
-  const sortedPosts = await getAllPosts();
+export default function PostsPage() {
+  const sortedPosts = getAllPosts();
 
   return (
     <div className="container max-w-4xl py-6 lg:py-10">
@@ -34,6 +31,7 @@ export default async function PostsPage() {
                 title={post.title}
                 description={post.description}
                 date={post.date}
+                category={post.category ?? undefined}
                 tags={post.tags}
               />
             </li>

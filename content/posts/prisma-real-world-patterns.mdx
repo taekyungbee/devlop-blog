@@ -1,0 +1,247 @@
+---
+title: Prisma ORM 실전 패턴 - 타입 안전한 DB 레이어 설계
+description: 블로그와 AI 트렌드 시스템을 구축하며 적용한 Prisma 스키마 설계, 관계 모델링, 성능 최적화 패턴을 공유합니다.
+date: 2025-01-02
+category: backend
+tags: ["prisma", "postgresql", "typescript", "orm", "database"]
+published: true
+---
+
+## Prisma를 선택한 이유
+
+Next.js + TypeScript 프로젝트에서 DB 작업을 할 때 가장 큰 고민은 **타입 안전성**입니다. 쿼리 결과가 런타임에서야 어떤 모양인지 알 수 있다면, TypeScript를 쓰는 의미가 반감됩니다.
+
+Prisma는 스키마에서 TypeScript 타입을 자동 생성해주기 때문에, 쿼리 작성 시점에 IDE가 자동완성과 타입 검사를 제공합니다.
+
+```typescript
+// 타입이 자동 추론됨
+const post = await prisma.post.findUnique({
+  where: { slug: "hello-world" },
+  include: { postTags: { include: { tag: true } } },
+});
+
+// post.postTags[0].tag.name - 자동완성 지원
+```
+
+## 실전 스키마 설계
+
+### 1. 다대다 관계: Post - Tag
+
+블로그 포스트와 태그는 전형적인 다대다(Many-to-Many) 관계입니다. Prisma는 암묵적/명시적 두 가지 방식을 지원하는데, 저는 **명시적 중간 테이블**을 선호합니다.
+
+```prisma
+model Post {
+  id       Int       @id @default(autoincrement())
+  title    String
+  postTags PostTag[]
+  // ...
+}
+
+model Tag {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  postTags PostTag[]
+}
+
+// 명시적 중간 테이블
+model PostTag {
+  postId Int  @map("post_id")
+  tagId  Int  @map("tag_id")
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
+```
+
+**명시적 중간 테이블의 장점:**
+- 나중에 `createdAt`, `order` 등 필드 추가 용이
+- 데이터베이스 네이밍 컨벤션 직접 제어 (`@map`)
+- 복합 기본키 명시적 정의
+
+### 2. 인덱스 전략
+
+자주 조회되는 컬럼에는 인덱스를 추가합니다. Prisma는 `@@index`로 선언적 인덱스 정의가 가능합니다.
+
+```prisma
+model TrendVideo {
+  id        Int      @id @default(autoincrement())
+  title     String
+  link      String   @unique
+  pubDate   DateTime @map("pub_date")
+  source    String
+  summary   String?
+  emailSent Boolean  @default(false) @map("email_sent")
+
+  // 날짜 역순 조회가 가장 빈번함
+  @@index([pubDate(sort: Desc)], map: "idx_trend_videos_pub_date")
+  // 이메일 미발송 필터링
+  @@index([emailSent], map: "idx_trend_videos_email_sent")
+  @@map("trend_videos")
+}
+```
+
+### 3. 네이밍 컨벤션: TypeScript ↔ PostgreSQL
+
+TypeScript는 camelCase, PostgreSQL은 snake_case가 관례입니다. `@map`으로 양쪽 모두 만족시킬 수 있습니다.
+
+```prisma
+model YouTubeChannel {
+  channelId String   @unique @map("channel_id")  // DB: channel_id
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("youtube_channels")  // 테이블명도 snake_case
+}
+```
+
+## 쿼리 패턴
+
+### 1. 태그별 포스트 조회
+
+```typescript
+export async function getPostsByTag(tagName: string) {
+  return prisma.post.findMany({
+    where: {
+      published: true,
+      postTags: {
+        some: {
+          tag: { name: tagName },
+        },
+      },
+    },
+    orderBy: { date: "desc" },
+    include: {
+      postTags: { include: { tag: true } },
+    },
+  });
+}
+```
+
+### 2. 태그별 포스트 개수
+
+```typescript
+export async function getTagCounts() {
+  const tags = await prisma.tag.findMany({
+    include: {
+      _count: { select: { postTags: true } },
+    },
+  });
+
+  return tags.reduce((acc, tag) => {
+    if (tag._count.postTags > 0) {
+      acc[tag.name] = tag._count.postTags;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+}
+```
+
+### 3. 중복 방지 Upsert
+
+RSS에서 영상을 수집할 때, 이미 존재하는 영상은 건너뛰어야 합니다.
+
+```typescript
+// 방법 1: createMany + skipDuplicates
+await prisma.trendVideo.createMany({
+  data: videos,
+  skipDuplicates: true,  // unique 제약 위반 시 무시
+});
+
+// 방법 2: upsert (업데이트가 필요할 때)
+await prisma.trendVideo.upsert({
+  where: { link: video.link },
+  update: { summary: newSummary },
+  create: video,
+});
+```
+
+## 성능 최적화
+
+### 1. N+1 문제 해결: include 활용
+
+```typescript
+// Bad: N+1 쿼리 발생
+const posts = await prisma.post.findMany();
+for (const post of posts) {
+  const tags = await prisma.postTag.findMany({
+    where: { postId: post.id },
+  });
+}
+
+// Good: 1개 쿼리로 해결
+const posts = await prisma.post.findMany({
+  include: {
+    postTags: { include: { tag: true } },
+  },
+});
+```
+
+### 2. 필요한 필드만 select
+
+전체 포스트 목록을 가져올 때 `content` 본문은 필요 없습니다.
+
+```typescript
+const posts = await prisma.post.findMany({
+  select: {
+    id: true,
+    slug: true,
+    title: true,
+    description: true,
+    date: true,
+    // content는 제외
+  },
+});
+```
+
+### 3. 페이지네이션
+
+```typescript
+async function getVideosPaginated(page: number, pageSize: number = 20) {
+  const [videos, total] = await Promise.all([
+    prisma.trendVideo.findMany({
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      orderBy: { pubDate: "desc" },
+    }),
+    prisma.trendVideo.count(),
+  ]);
+
+  return {
+    videos,
+    total,
+    totalPages: Math.ceil(total / pageSize),
+  };
+}
+```
+
+## DB Pull vs Push
+
+Prisma는 두 가지 마이그레이션 방향을 지원합니다:
+
+### db push (개발용)
+```bash
+npx prisma db push
+```
+- 스키마 → DB 즉시 반영
+- 마이그레이션 히스토리 없음
+- 프로토타이핑에 적합
+
+### migrate (프로덕션용)
+```bash
+npx prisma migrate dev --name add_category
+npx prisma migrate deploy  # CI/CD에서 실행
+```
+- SQL 마이그레이션 파일 생성
+- 버전 관리 가능
+- 롤백 추적 가능
+
+<Callout type="info">
+  저는 개발 중에는 `db push`로 빠르게 반복하고, 안정화되면 `migrate`로 전환하는 방식을 사용합니다.
+</Callout>
+
+## 마무리
+
+Prisma를 사용하면서 가장 좋았던 점은 **DB 작업이 두렵지 않게 되었다**는 것입니다. 타입 추론 덕분에 쿼리 실수가 줄었고, 스키마 변경도 자신 있게 할 수 있게 되었습니다.
+
+다만 복잡한 집계 쿼리나 Raw SQL이 필요한 경우도 있으니, `prisma.$queryRaw`도 익혀두면 좋습니다.
