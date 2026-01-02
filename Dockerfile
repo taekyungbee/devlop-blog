@@ -20,6 +20,9 @@ COPY . .
 # Prisma generate
 RUN npx prisma generate
 
+# Velite build (MDX → .velite 생성)
+RUN npx velite build
+
 # Next.js 빌드 (standalone 모드)
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 -p 7000",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && node node_modules/velite/bin/velite.js build && next build",
     "start": "next start",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
