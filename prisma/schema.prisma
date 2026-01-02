@@ -14,6 +14,7 @@ model Post {
   description String?    @db.VarChar(1000)
   content     String
   published   Boolean    @default(true)
+  category    String?    @db.VarChar(20) // ai, backend, frontend, devops, project
   seriesId    Int?       @map("series_id")
   date        DateTime   @db.Date
   createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -24,6 +25,7 @@ model Post {
   @@index([date(sort: Desc)], map: "idx_posts_date")
   @@index([published], map: "idx_posts_published")
   @@index([slug], map: "idx_posts_slug")
+  @@index([category], map: "idx_posts_category")
   @@map("posts")
 }
 
@@ -82,6 +84,7 @@ model TrendNews {
   link      String   @unique @db.VarChar(1000)
   pubDate   DateTime @map("pub_date") @db.Timestamptz(6)
   source    String   @db.VarChar(100)
+  summary   String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([pubDate(sort: Desc)], map: "idx_trend_news_pub_date")

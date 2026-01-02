@@ -306,6 +306,11 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
                           <h4 className="font-medium hover:text-primary transition-colors line-clamp-2 text-sm">
                             {item.title}
                           </h4>
+                          {item.summary && (
+                            <p className="mt-2 text-xs text-muted-foreground line-clamp-3 italic opacity-80">
+                              {item.summary}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                             <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal">
                               {item.source}

@@ -12,7 +12,7 @@ export function Footer() {
             rel="noreferrer"
             className="font-medium underline underline-offset-4"
           >
-            {siteConfig.author}
+            {siteConfig.author.name}
           </a>
           . The source code is available on{" "}
           <a

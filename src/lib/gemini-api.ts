@@ -33,12 +33,19 @@ export async function summarizeText(
   const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
   const prompt = language === "ko"
-    ? `다음은 유튜브 영상의 자막입니다. 핵심 내용을 ${maxLength}자 이내로 요약해주세요.
+    ? `다음은 유튜브 영상의 자막입니다. 핵심 내용을 ${maxLength}자 이내로 반드시 한국어로 요약해주세요.
+AI 모델의 답변 여부나 서론 없이 작성된 요약 내용만 즉시 출력하세요.
 ${title ? `영상 제목: ${title}\n` : ""}
-요약 시 다음 형식을 따라주세요:
-- 핵심 주제 (1줄)
-- 주요 내용 (3-5개 bullet point)
-- 결론/시사점 (1줄)
+[출력 형식]
+(핵심 주제 1줄)
+
+(주요 내용 3-5개 bullet point)
+
+(결론/시사점 1줄)
+
+(참고 자료/링크 - 영상/자막 내 언급된 유용한 URL이나 자료가 있다면 간단히 명시. 없으면 생략)
+
+* 주의: "핵심 주제:", "주요 내용:", "결론:" 같은 라벨을 붙이지 말고 내용만 작성하세요.
 
 자막:
 ${text}`
@@ -74,7 +81,7 @@ export async function summarizeVideoBatch(
 
       const summary = await summarizeText(truncatedTranscript, {
         title: video.title,
-        language: /[가-힣]/.test(video.title) ? "ko" : "en",
+        language: "ko",
       });
 
       summaries.set(video.videoId, summary);
@@ -104,12 +111,13 @@ export async function summarizeFromVideoInfo(info: {
   duration: string;
 }): Promise<string> {
   const ai = getGenAI();
-  const model = ai.getGenerativeModel({ model: "gemini-2.0-flash" });
+  const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-  const language = /[가-힣]/.test(info.title) ? "ko" : "en";
+  const language = "ko";
 
   const prompt = language === "ko"
-    ? `다음 유튜브 영상의 제목과 설명을 바탕으로 영상 내용을 추론하여 요약해주세요.
+    ? `다음 유튜브 영상의 제목과 설명을 요약해주세요.
+AI 모델의 답변 여부나 서론 없이 작성된 요약 내용만 즉시 출력하세요.
 
 영상 제목: ${info.title}
 채널명: ${info.channelName}
@@ -117,13 +125,17 @@ export async function summarizeFromVideoInfo(info: {
 영상 설명:
 ${info.description.slice(0, 2000)}
 
-다음 형식으로 작성해주세요:
-- 예상 주제 (1줄)
-- 예상 주요 내용 (3-5개 bullet point)
-- 시청 추천 대상 (1줄)
+[출력 형식]
+(주제 1줄)
 
-※ 자막을 가져올 수 없어 영상 정보 기반으로 추론한 요약입니다.`
-    : `Based on the following YouTube video title and description, infer and summarize the video content.
+(주요 내용 3-5개 bullet point)
+
+(시청 추천 대상 1줄)
+
+(참고 자료/링크 - 설명란에 있는 유용한 URL이나 자료가 있다면 간단히 명시. 없으면 생략)
+
+* 주의: "주제:", "주요 내용:", "시청 추천 대상:" 같은 라벨을 붙이지 말고 내용만 작성하세요.`
+    : `Summarize the following YouTube video based on its title and description.
 
 Video Title: ${info.title}
 Channel: ${info.channelName}
@@ -132,11 +144,9 @@ Description:
 ${info.description.slice(0, 2000)}
 
 Format:
-- Expected topic (1 line)
-- Expected key points (3-5 bullet points)
-- Recommended audience (1 line)
-
-※ This is an inferred summary based on video info as captions were unavailable.`;
+- Topic (1 line)
+- Key points (3-5 bullet points)
+- Recommended audience (1 line)`;
 
   try {
     const result = await model.generateContent(prompt);
@@ -144,6 +154,65 @@ Format:
     return response.text();
   } catch (error) {
     console.error("[Gemini API] Video info summarization failed:", error);
+    throw error;
+  }
+}
+
+export async function translateToKorean(text: string): Promise<string> {
+  const ai = getGenAI();
+  const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const prompt = `Translate the following text to Korean. Maintain the original formatting and meaning. If the text is already in Korean, return it as is.
+
+Text:
+${text}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("[Gemini API] Translation failed:", error);
+    throw error;
+  }
+}
+
+/**
+ * 뉴스 기사 요약
+ */
+export async function summarizeNews(
+  title: string,
+  content: string,
+  source: string
+): Promise<string> {
+  const ai = getGenAI();
+  const model = ai.getGenerativeModel({ model: "gemini-3-flash-preview" });
+
+  const prompt = `다음 뉴스 기사의 내용을 한국어로 요약해 주세요.
+AI 모델의 답변 여부나 서론, 본문 없음 언급 등을 절대 포함하지 말고 작성된 요약 내용만 즉시 출력하세요.
+입력 데이터가 부족해도 가능한 범위 내에서 요약문 형식만 반환하세요.
+
+기사 제목: ${title}
+출처: ${source}
+
+기사 본문(일부):
+${content.slice(0, 10000)}
+
+[출력 형식]
+(한 줄 핵심 요약 내용)
+
+(주요 소식 3-5개 bullet point, '-'로 시작)
+
+(기술적 시사점/배경 1-2문장)
+
+* 주의: "한 줄 핵심 요약:", "주요 소식:", "기술적 시사점:" 같은 라벨을 붙이지 말고 내용만 작성하세요.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    return response.text();
+  } catch (error) {
+    console.error("[Gemini API] News summarization failed:", error);
     throw error;
   }
 }

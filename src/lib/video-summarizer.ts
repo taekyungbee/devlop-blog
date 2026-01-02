@@ -6,6 +6,7 @@
 import { prisma } from "./prisma";
 import { getTranscript, extractVideoId, getVideoInfo } from "./youtube-transcript";
 import { summarizeText, summarizeFromVideoInfo, isGeminiConfigured } from "./gemini-api";
+import { summarizeFromAudio } from "./audio-analyzer";
 
 interface VideoToSummarize {
   id: number;
@@ -59,28 +60,37 @@ export async function summarizeAndSaveVideo(
       console.log(`[Summarizer] Using transcript for ${videoId}`);
       summary = await summarizeText(transcript, {
         title: video.title,
-        language: /[가-힣]/.test(video.title) ? "ko" : "en",
+        language: "ko",
       });
     } else {
-      // 2B. 자막 없으면 영상 정보로 Gemini fallback
-      console.log(`[Summarizer] No transcript, using video info fallback for ${videoId}`);
-      const videoInfo = await getVideoInfo(videoId);
+      // 2B. 자막 없으면 오디오 분석 시도
+      console.log(`[Summarizer] No transcript, trying audio analysis for ${videoId}`);
+      const audioSummary = await summarizeFromAudio(videoId, video.title);
 
-      if (!videoInfo || !videoInfo.description) {
-        // 영상 정보도 없으면 실패
-        await prisma.trendVideo.update({
-          where: { id: video.id },
-          data: { summary: "[요약 불가]" },
+      if (audioSummary) {
+        console.log(`[Summarizer] Audio analysis successful for ${videoId}`);
+        summary = audioSummary;
+      } else {
+        // 2C. 오디오 분석도 실패하면 영상 정보로 fallback
+        console.log(`[Summarizer] Audio failed, using video info fallback for ${videoId}`);
+        const videoInfo = await getVideoInfo(videoId);
+
+        if (!videoInfo || !videoInfo.description) {
+          // 영상 정보도 없으면 실패
+          await prisma.trendVideo.update({
+            where: { id: video.id },
+            data: { summary: "[요약 불가]" },
+          });
+          return { success: true, summary: "[요약 불가]" };
+        }
+
+        summary = await summarizeFromVideoInfo({
+          title: videoInfo.title || video.title,
+          description: videoInfo.description,
+          channelName: videoInfo.channelName || video.source,
+          duration: videoInfo.duration,
         });
-        return { success: true, summary: "[요약 불가]" };
       }
-
-      summary = await summarizeFromVideoInfo({
-        title: videoInfo.title || video.title,
-        description: videoInfo.description,
-        channelName: videoInfo.channelName || video.source,
-        duration: videoInfo.duration,
-      });
     }
 
     // 3. DB 저장

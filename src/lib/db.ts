@@ -68,12 +68,14 @@ export async function saveNews(newsItems: DbTrendItem[]) {
         title: news.title,
         pubDate,
         source: news.source,
+        // 요약은 수동/AI로 생성되므로 upsert 시에는 덮어쓰지 않음 (필요시 추가)
       },
       create: {
         title: news.title,
         link: news.link,
         pubDate,
         source: news.source,
+        summary: news.summary,
       },
     });
   }
@@ -112,6 +114,7 @@ export async function getVideosFromDb(limit = 10): Promise<DbTrendItem[]> {
     pubDate: v.pubDate.toISOString(),
     source: v.source,
     thumbnail: v.thumbnail ?? undefined,
+    summary: v.summary ?? undefined,
   }));
 }
 
@@ -159,6 +162,7 @@ export async function getNewsFromDb(limit = 10): Promise<DbTrendItem[]> {
     link: n.link,
     pubDate: n.pubDate.toISOString(),
     source: n.source,
+    summary: n.summary ?? undefined,
   }));
 }
 
@@ -181,6 +185,7 @@ export async function getNewsPaginated(
       link: n.link,
       pubDate: n.pubDate.toISOString(),
       source: n.source,
+      summary: n.summary ?? undefined,
     })),
     total,
     page,

@@ -13,11 +13,11 @@ export function Header() {
         <div className="mr-4 flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">
             <Image
-              src="/nano-banana.png"
+              src="/lazybee-icon.png"
               alt="Logo"
-              width={24}
-              height={24}
-              className="object-contain"
+              width={32}
+              height={32}
+              className="object-contain rounded-full"
             />
             <span className="font-bold hidden sm:inline-block">{siteConfig.name}</span>
           </Link>
@@ -26,7 +26,7 @@ export function Header() {
               href="/trends"
               className="transition-colors hover:text-foreground/80 text-foreground/60 font-medium text-red-500"
             >
-              Trends
+              AI Trends
             </Link>
             <Link
               href="/posts"
@@ -35,10 +35,10 @@ export function Header() {
               Posts
             </Link>
             <Link
-              href="/tags"
+              href="/projects"
               className="transition-colors hover:text-foreground/80 text-foreground/60"
             >
-              Tags
+              Projects
             </Link>
             <Link
               href="/about"

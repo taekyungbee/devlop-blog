@@ -47,8 +47,8 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                                 rel="noopener noreferrer"
                                 className="group block"
                             >
-                                <Card className="flex overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20 h-full">
-                                    <div className="relative w-40 min-w-40 bg-muted">
+                                <Card className="flex h-[160px] p-0 gap-0 items-stretch overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20">
+                                    <div className="relative w-32 min-w-32 bg-muted">
                                         {video.thumbnail && (
                                             <Image
                                                 src={video.thumbnail}
@@ -59,16 +59,21 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                                             />
                                         )}
                                     </div>
-                                    <div className="p-4 flex flex-col justify-between flex-1">
-                                        <div>
+                                    <div className="p-4 flex flex-col flex-1 min-w-0">
+                                        <div className="space-y-1">
                                             <h4 className="font-medium line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                                                 {video.title}
                                             </h4>
-                                            <p className="text-xs text-muted-foreground mt-1">
+                                            <p className="text-xs text-muted-foreground">
                                                 {video.source}
                                             </p>
                                         </div>
-                                        <time className="text-xs text-muted-foreground mt-2">
+                                        {video.summary && (
+                                            <p className="text-[11px] leading-relaxed text-muted-foreground/80 mt-2 line-clamp-3 italic">
+                                                &ldquo;{video.summary}&rdquo;
+                                            </p>
+                                        )}
+                                        <time className="text-xs text-muted-foreground mt-auto">
                                             {new Date(video.pubDate).toLocaleDateString()}
                                         </time>
                                     </div>
@@ -92,21 +97,23 @@ export function TrendSection({ trends, limit }: TrendSectionProps) {
                                 rel="noopener noreferrer"
                                 className="group block"
                             >
-                                <Card className="flex overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20 h-full">
-                                    <div className="relative w-40 min-w-40 bg-muted/50 flex items-center justify-center">
-                                        <span className="text-3xl grayscale group-hover:grayscale-0 transition-all duration-300">📰</span>
-                                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                    <div className="p-4 flex flex-col justify-between flex-1">
-                                        <div>
+                                <Card className="flex h-[160px] p-0 gap-0 items-stretch overflow-hidden hover:bg-muted/50 transition-colors border-none shadow-sm hover:shadow-md bg-secondary/20">
+
+                                    <div className="p-4 flex flex-col flex-1 min-w-0">
+                                        <div className="space-y-1">
                                             <h4 className="font-medium line-clamp-2 leading-tight group-hover:text-primary transition-colors">
                                                 {item.title}
                                             </h4>
-                                            <p className="text-xs text-muted-foreground mt-1">
+                                            <p className="text-xs text-muted-foreground">
                                                 {item.source}
                                             </p>
                                         </div>
-                                        <time className="text-xs text-muted-foreground mt-2">
+                                        {item.summary && (
+                                            <p className="text-[11px] leading-relaxed text-muted-foreground/80 mt-2 line-clamp-3 italic">
+                                                &ldquo;{item.summary}&rdquo;
+                                            </p>
+                                        )}
+                                        <time className="text-xs text-muted-foreground mt-auto">
                                             {new Date(item.pubDate).toLocaleDateString()}
                                         </time>
                                     </div>

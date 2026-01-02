@@ -19,12 +19,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: siteConfig.name,
+    default: `${siteConfig.name} | 풀스택 개발자 기술 블로그`,
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
-  authors: [{ name: siteConfig.author }],
-  creator: siteConfig.author,
+  keywords: siteConfig.keywords,
+  authors: [{ name: siteConfig.author.name }],
+  creator: siteConfig.author.name,
   openGraph: {
     type: "website",
     locale: "ko_KR",
@@ -32,11 +33,16 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
+    images: [{ url: "/og-image.png", width: 1200, height: 630 }],
   },
   twitter: {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 
