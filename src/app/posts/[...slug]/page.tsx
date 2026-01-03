@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { MDXContent } from "@/components/mdx/mdx-content";
 import { GiscusComments } from "@/components/giscus-comments";
+import { TableOfContents } from "@/components/toc";
 import Link from "next/link";
 
 interface PostPageProps {
@@ -62,37 +63,47 @@ export default async function PostPage({ params }: PostPageProps) {
   }
 
   return (
-    <article className="container max-w-3xl py-6 lg:py-10">
-      <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <time dateTime={post.date}>{formatDate(post.date)}</time>
-          {post.category && (
-            <>
-              <span>•</span>
-              <Badge variant="outline">{post.category}</Badge>
-            </>
-          )}
-        </div>
-        <h1 className="font-bold text-4xl lg:text-5xl">{post.title}</h1>
-        {post.description && (
-          <p className="text-xl text-muted-foreground">{post.description}</p>
-        )}
-        {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {post.tags.map((tag) => (
-              <Link key={tag} href={`/tags/${tag}`}>
-                <Badge variant="secondary">{tag}</Badge>
-              </Link>
-            ))}
+    <div className="container max-w-6xl py-6 lg:py-10">
+      <div className="flex gap-10">
+        {/* 메인 콘텐츠 */}
+        <article className="flex-1 min-w-0 max-w-3xl">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <time dateTime={post.date}>{formatDate(post.date)}</time>
+              {post.category && (
+                <>
+                  <span>•</span>
+                  <Badge variant="outline">{post.category}</Badge>
+                </>
+              )}
+            </div>
+            <h1 className="font-bold text-4xl lg:text-5xl">{post.title}</h1>
+            {post.description && (
+              <p className="text-xl text-muted-foreground">{post.description}</p>
+            )}
+            {post.tags && post.tags.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {post.tags.map((tag) => (
+                  <Link key={tag} href={`/tags/${tag}`}>
+                    <Badge variant="secondary">{tag}</Badge>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
-        )}
+          <hr className="my-8" />
+          <div className="prose prose-neutral dark:prose-invert max-w-none">
+            <MDXContent code={post.body} />
+          </div>
+          <hr className="my-8" />
+          <GiscusComments />
+        </article>
+
+        {/* 우측 TOC 사이드바 */}
+        <aside className="hidden xl:block w-64 shrink-0">
+          <TableOfContents />
+        </aside>
       </div>
-      <hr className="my-8" />
-      <div className="prose prose-neutral dark:prose-invert max-w-none">
-        <MDXContent code={post.body} />
-      </div>
-      <hr className="my-8" />
-      <GiscusComments />
-    </article>
+    </div>
   );
 }
