@@ -1,7 +1,6 @@
 export async function register() {
-  // Only run on server (not edge runtime)
-  if (process.env.NEXT_RUNTIME === "nodejs") {
-    const { initScheduler } = await import("./lib/scheduler");
-    initScheduler();
-  }
+  // Scheduler disabled - using Cloud Scheduler instead
+  // Cloud Scheduler jobs:
+  // - trends-daily: 00:00 KST
+  // - trends-send-email: 08:00 KST
 }
