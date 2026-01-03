@@ -2,7 +2,7 @@ backend:
   name: github
   repo: taekyungbee/devlop-blog
   branch: develop
-  base_url: https://develop-blog-wnzgfqxu3a-du.a.run.app
+
   auth_endpoint: /api/auth
 
 media_folder: public/images/posts

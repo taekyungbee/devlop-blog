@@ -35,13 +35,52 @@ interface VideoForNotion {
 }
 
 /**
- * 요약된 영상을 노션에 등록
+ * 요약 텍스트를 노션 블록으로 변환
+ */
+type NotionBlock = Parameters<Client["blocks"]["children"]["append"]>[0]["children"][number];
+
+function summaryToBlocks(summary: string): NotionBlock[] {
+  const blocks: NotionBlock[] = [];
+  const lines = summary.split("\n");
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // 불릿 포인트
+    if (trimmed.startsWith("- ") || trimmed.startsWith("• ")) {
+      blocks.push({
+        object: "block",
+        type: "bulleted_list_item",
+        bulleted_list_item: {
+          rich_text: [{ type: "text", text: { content: trimmed.slice(2) } }],
+        },
+      });
+    }
+    // 일반 텍스트
+    else {
+      blocks.push({
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [{ type: "text", text: { content: trimmed } }],
+        },
+      });
+    }
+  }
+
+  return blocks;
+}
+
+/**
+ * 요약된 영상을 노션에 등록 (본문 포함)
  */
 export async function addVideoToNotion(video: VideoForNotion): Promise<boolean> {
   try {
     const notion = getNotionClient();
 
-    await notion.pages.create({
+    // 1. 페이지 생성
+    const page = await notion.pages.create({
       parent: { database_id: NOTION_TRENDS_DB_ID! },
       properties: {
         Title: {
@@ -61,6 +100,34 @@ export async function addVideoToNotion(video: VideoForNotion): Promise<boolean> 
         },
       },
     });
+
+    // 2. 본문에 요약 내용 추가
+    const contentBlocks = summaryToBlocks(video.summary);
+    if (contentBlocks.length > 0) {
+      const blocks: NotionBlock[] = [
+        // 유튜브 링크 북마크
+        {
+          object: "block",
+          type: "bookmark",
+          bookmark: {
+            url: video.link,
+          },
+        },
+        // 구분선
+        {
+          object: "block",
+          type: "divider",
+          divider: {},
+        },
+        // 요약 내용
+        ...contentBlocks,
+      ];
+
+      await notion.blocks.children.append({
+        block_id: page.id,
+        children: blocks,
+      });
+    }
 
     console.log(`[Notion] Added: ${video.title.slice(0, 50)}...`);
     return true;
