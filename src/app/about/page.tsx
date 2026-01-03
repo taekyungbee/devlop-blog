@@ -115,16 +115,6 @@ export default function AboutPage() {
               {siteConfig.links.github}
             </a>
           </li>
-          <li>
-            Twitter:{" "}
-            <a
-              href={siteConfig.links.twitter}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {siteConfig.links.twitter}
-            </a>
-          </li>
         </ul>
 
         <h2>이 블로그에 대해</h2>
