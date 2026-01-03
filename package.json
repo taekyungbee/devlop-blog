@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "docker:build": "docker build -t develop-blog .",
     "docker:run": "docker run -p 8080:8080 --env-file .env develop-blog",
-    "deploy": "bash scripts/deploy-cloud-run.sh"
+    "deploy": "bash scripts/deploy-cloud-run.sh",
+    "reset:news": "tsx scripts/reset-news-summaries.ts"
   },
   "dependencies": {
     "@distube/ytdl-core": "^4.16.12",

@@ -286,67 +286,71 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
             </span>
           </h2>
 
-          <Card className="bg-background/40 backdrop-blur border-muted/50">
-            <CardContent className="p-0">
-              {filteredNews.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  검색 결과가 없습니다.
-                </div>
-              ) : (
-                <>
-                  <ul className="divide-y divide-border/50 max-h-[600px] overflow-y-auto">
-                    {filteredNews.map((item, i) => (
-                      <li key={`${item.link}-${i}`}>
-                        <a
-                          href={item.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block p-4 hover:bg-muted/50 transition-colors"
-                        >
-                          <h4 className="font-medium hover:text-primary transition-colors line-clamp-2 text-sm">
-                            {item.title}
-                          </h4>
-                          {item.summary && (
-                            <p className="mt-2 text-xs text-muted-foreground line-clamp-3 italic opacity-80">
-                              {item.summary}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                            <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal">
-                              {item.source}
-                            </Badge>
-                            <time>{new Date(item.pubDate).toLocaleDateString()}</time>
-                          </div>
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {/* Load More Button for News */}
-                  {newsPage < newsTotalPages && !searchQuery && (
-                    <div className="p-4 border-t border-border/50">
-                      <Button
-                        variant="ghost"
-                        onClick={loadMoreNews}
-                        disabled={newsLoading}
-                        className="w-full gap-2"
-                        size="sm"
+          <div className="space-y-4">
+            {filteredNews.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                검색 결과가 없습니다.
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4">
+                  {filteredNews.map((item, i) => (
+                    <Card
+                      key={`${item.link}-${i}`}
+                      className="bg-background/40 backdrop-blur border-muted/50 hover:bg-muted/50 transition-colors"
+                    >
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block p-4"
                       >
-                        {newsLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            로딩 중...
-                          </>
-                        ) : (
-                          <>더 보기 ({newsPage}/{newsTotalPages})</>
+                        <h4 className="font-medium hover:text-primary transition-colors line-clamp-2 text-sm">
+                          {item.title}
+                        </h4>
+                        {item.summary && (
+                          <p className="mt-2 text-xs text-muted-foreground line-clamp-3 italic opacity-80">
+                            {item.summary}
+                          </p>
                         )}
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-5 px-1.5 font-normal"
+                          >
+                            {item.source}
+                          </Badge>
+                          <time>{new Date(item.pubDate).toLocaleDateString()}</time>
+                        </div>
+                      </a>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Load More Button for News */}
+                {newsPage < newsTotalPages && !searchQuery && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="ghost"
+                      onClick={loadMoreNews}
+                      disabled={newsLoading}
+                      className="w-full gap-2"
+                      size="sm"
+                    >
+                      {newsLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          로딩 중...
+                        </>
+                      ) : (
+                        <>더 보기 ({newsPage}/{newsTotalPages})</>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

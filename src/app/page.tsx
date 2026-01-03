@@ -40,7 +40,7 @@ export default async function Home() {
 
       <div className="border-t border-border/40" />
 
-      <TrendSection trends={aiTrends} limit={5} />
+      <TrendSection trends={aiTrends} limit={7} />
 
       <div className="border-t border-border/40" />
 
