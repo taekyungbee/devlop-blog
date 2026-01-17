@@ -1,3 +1,8 @@
+/**
+ * Database Operations - 조회 전용
+ * 수집/저장은 ai-trends-collector 프로젝트에서 처리
+ */
+
 import { prisma } from "./prisma";
 
 export interface DbTrendItem {
@@ -7,91 +12,6 @@ export interface DbTrendItem {
   source: string;
   thumbnail?: string;
   summary?: string;
-}
-
-/**
- * YouTube 링크 정규화 (/shorts/xxx -> /watch?v=xxx)
- */
-function normalizeYouTubeLink(link: string): string {
-  // /shorts/VIDEO_ID -> /watch?v=VIDEO_ID
-  const shortsMatch = link.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
-  if (shortsMatch) {
-    return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
-  }
-  return link;
-}
-
-export async function saveVideos(videos: DbTrendItem[]) {
-  for (const video of videos) {
-    const pubDate = new Date(video.pubDate);
-    const normalizedLink = normalizeYouTubeLink(video.link);
-
-    await prisma.trendVideo.upsert({
-      where: { link: normalizedLink },
-      update: {
-        title: video.title,
-        pubDate,
-        source: video.source,
-        thumbnail: video.thumbnail,
-      },
-      create: {
-        title: video.title,
-        link: normalizedLink,
-        pubDate,
-        source: video.source,
-        thumbnail: video.thumbnail,
-      },
-    });
-  }
-
-  // Keep only latest 5000
-  const oldVideos = await prisma.trendVideo.findMany({
-    orderBy: { pubDate: "desc" },
-    skip: 5000,
-    select: { id: true },
-  });
-
-  if (oldVideos.length > 0) {
-    await prisma.trendVideo.deleteMany({
-      where: { id: { in: oldVideos.map((v) => v.id) } },
-    });
-  }
-}
-
-export async function saveNews(newsItems: DbTrendItem[]) {
-  for (const news of newsItems) {
-    const pubDate = new Date(news.pubDate);
-
-    await prisma.trendNews.upsert({
-      where: { link: news.link },
-      update: {
-        title: news.title,
-        pubDate,
-        source: news.source,
-        // 요약은 수동/AI로 생성되므로 upsert 시에는 덮어쓰지 않음 (필요시 추가)
-      },
-      create: {
-        title: news.title,
-        link: news.link,
-        pubDate,
-        source: news.source,
-        summary: news.summary,
-      },
-    });
-  }
-
-  // Keep only latest 5000
-  const oldNews = await prisma.trendNews.findMany({
-    orderBy: { pubDate: "desc" },
-    skip: 5000,
-    select: { id: true },
-  });
-
-  if (oldNews.length > 0) {
-    await prisma.trendNews.deleteMany({
-      where: { id: { in: oldNews.map((n) => n.id) } },
-    });
-  }
 }
 
 export interface PaginatedResult<T> {
@@ -194,40 +114,7 @@ export async function getNewsPaginated(
   };
 }
 
-export async function clearAllTrends() {
-  await prisma.trendVideo.deleteMany({});
-  await prisma.trendNews.deleteMany({});
-  console.log("[DB] All trends cleared.");
-}
-
-/**
- * 특정 날짜 이전의 비디오 삭제
- */
-export async function deleteVideosBefore(date: Date): Promise<number> {
-  const result = await prisma.trendVideo.deleteMany({
-    where: { pubDate: { lt: date } },
-  });
-  console.log(`[DB] Deleted ${result.count} videos before ${date.toISOString()}`);
-  return result.count;
-}
-
-/**
- * 실패한 요약을 null로 리셋 (재시도용)
- */
-export async function resetFailedSummaries(): Promise<number> {
-  const result = await prisma.trendVideo.updateMany({
-    where: {
-      summary: {
-        in: ["[요약 불가]", "[자막 없음]", "[요약 실패]", "[URL 파싱 실패]"],
-      },
-    },
-    data: { summary: null },
-  });
-  console.log(`[DB] Reset ${result.count} failed summaries`);
-  return result.count;
-}
-
-// YouTube Channel Management
+// YouTube Channel 조회
 export interface YouTubeChannelData {
   channelId: string;
   name: string;
@@ -245,36 +132,6 @@ export async function getActiveChannels(): Promise<YouTubeChannelData[]> {
     name: c.name,
     category: c.category as "korean" | "global",
   }));
-}
-
-export async function getChannelsByCategory(
-  category: "korean" | "global"
-): Promise<YouTubeChannelData[]> {
-  const channels = await prisma.youTubeChannel.findMany({
-    where: { active: true, category },
-    orderBy: { name: "asc" },
-  });
-
-  return channels.map((c) => ({
-    channelId: c.channelId,
-    name: c.name,
-    category: c.category as "korean" | "global",
-  }));
-}
-
-export async function addChannel(data: YouTubeChannelData): Promise<void> {
-  await prisma.youTubeChannel.upsert({
-    where: { channelId: data.channelId },
-    update: { name: data.name, category: data.category, active: true },
-    create: { channelId: data.channelId, name: data.name, category: data.category },
-  });
-}
-
-export async function removeChannel(channelId: string): Promise<void> {
-  await prisma.youTubeChannel.update({
-    where: { channelId },
-    data: { active: false },
-  });
 }
 
 export async function getAllChannels() {
