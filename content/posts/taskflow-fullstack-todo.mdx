@@ -1,0 +1,416 @@
+---
+title: TaskFlow - AI 오케스트레이터를 탑재한 풀스택 할 일 관리 앱
+description: React + Express + Prisma로 구현한 프로덕션 레벨 Todo 앱. Claude/Gemini/OpenAI 멀티 프로바이더와 자동 코드 실행 시스템까지.
+date: 2026-01-18
+category: fullstack
+tags: ["react", "express", "prisma", "typescript", "ai", "claude"]
+published: true
+---
+
+## 프로젝트 소개
+
+"또 다른 Todo 앱?"이라고 생각하실 수 있습니다. 하지만 이 프로젝트는 **실무 수준의 풀스택 아키텍처**를 연습하기 위한 프로젝트입니다.
+
+8개의 Phase를 거쳐 완성했습니다:
+1. MVP (인증 + 기본 CRUD)
+2. 카테고리 & 태그
+3. 검색 & 필터링
+4. 대시보드 & Subtask
+5. 반복 작업 & 알림
+6. 캘린더 & 칸반 보드
+7. 다크모드 & 반응형
+8. 테스팅 & 최적화
+
+그리고 독창적인 기능을 추가했습니다:
+- **AI 멀티 프로바이더**: Claude, Gemini, OpenAI 자동 Fallback
+- **Orchestrator 시스템**: Claude Code CLI 자동 실행
+
+## 기술 스택
+
+### Frontend (apps/web)
+```json
+{
+  "framework": "React 18.2",
+  "build": "Vite 5.1",
+  "styling": "TailwindCSS 3.4",
+  "stateManagement": {
+    "server": "React Query 5 (TanStack Query)",
+    "client": "Zustand 4.5"
+  },
+  "dragDrop": "@dnd-kit",
+  "testing": "Vitest + React Testing Library + Playwright"
+}
+```
+
+### Backend (apps/api)
+```json
+{
+  "runtime": "Node.js 20",
+  "framework": "Express 4.18",
+  "orm": "Prisma 5.9",
+  "auth": "JWT (Access + Refresh Token)",
+  "validation": "Zod",
+  "ai": "@anthropic-ai/sdk, @google/generative-ai, openai"
+}
+```
+
+## 핵심 기능
+
+### 1. React Query + Zustand 하이브리드
+
+**서버 상태**는 React Query로, **클라이언트 상태**는 Zustand로 관리합니다.
+
+```typescript
+// 서버 상태: React Query
+export function useTasks(params?: TasksQueryParams) {
+  return useQuery({
+    queryKey: ['tasks', params],
+    queryFn: async () => {
+      const response = await apiClient.get('/tasks', { params });
+      return response.data.data;
+    },
+    staleTime: 5 * 60 * 1000, // 5분 캐싱
+  });
+}
+
+// 클라이언트 상태: Zustand
+const useThemeStore = create((set) => ({
+  theme: 'system',
+  setTheme: (theme) => {
+    set({ theme });
+    localStorage.setItem('theme', theme);
+  },
+}));
+```
+
+### 2. 계층형 아키텍처
+
+Controller → Service → Repository 패턴으로 관심사를 분리했습니다.
+
+```typescript
+// Controller: HTTP 처리
+export const taskController = {
+  async getAll(req: Request, res: Response) {
+    const tasks = await taskService.findAll(req.user.id, req.query);
+    res.json({ success: true, data: tasks });
+  }
+};
+
+// Service: 비즈니스 로직
+export const taskService = {
+  async findAll(userId: string, filters: TasksFilter) {
+    return taskRepository.findAll(userId, filters);
+  }
+};
+
+// Repository: 데이터 접근
+export const taskRepository = {
+  async findAll(userId: string, filters: TasksFilter) {
+    return prisma.task.findMany({
+      where: { userId, isDeleted: false, ...filters },
+      include: { category: true, taskTags: { include: { tag: true } } }
+    });
+  }
+};
+```
+
+### 3. AI 멀티 프로바이더 시스템
+
+사용자가 우선순위를 설정하면, 해당 순서대로 API를 시도합니다.
+
+```typescript
+// 사용자 설정
+{
+  priority: ["claude", "gemini", "openai"],
+  claudeKey: "sk-ant-xxx",
+  geminiKey: "xxx",
+  openaiKey: "sk-xxx"
+}
+
+// Fallback 로직
+async function getProvider(userId: string) {
+  const config = await getConfig(userId);
+  const priority = config.priority || ['claude', 'gemini', 'openai'];
+
+  for (const name of priority) {
+    const key = config[`${name}Key`];
+    if (key) {
+      return createProvider(name, key);
+    }
+  }
+  return null;
+}
+```
+
+### 4. Orchestrator 시스템
+
+Claude Code CLI를 자동으로 실행하는 시스템입니다.
+
+```typescript
+// 작업 등록
+POST /api/orchestrator/jobs
+{
+  "projectId": "xxx",
+  "prompt": "로그인 기능을 구현해줘",
+  "priority": 1
+}
+
+// 큐에서 작업 처리
+class OrchestratorService {
+  async processJob(job: ExecutionJob) {
+    const process = spawn('claude-code', ['--prompt', job.prompt], {
+      cwd: project.localPath
+    });
+
+    process.stdout.on('data', (data) => {
+      this.emit('log', { jobId: job.id, message: data.toString() });
+      this.saveLog(job.id, data.toString());
+    });
+  }
+}
+```
+
+**SSE 실시간 로그 스트리밍**:
+
+```typescript
+// 서버
+GET /api/orchestrator/jobs/:id/stream
+
+res.writeHead(200, {
+  'Content-Type': 'text/event-stream',
+  'Cache-Control': 'no-cache',
+  'Connection': 'keep-alive'
+});
+
+orchestrator.on('log', (log) => {
+  res.write(`data: ${JSON.stringify(log)}\n\n`);
+});
+
+// 클라이언트
+const eventSource = new EventSource(`/api/orchestrator/jobs/${jobId}/stream`);
+eventSource.onmessage = (e) => {
+  const log = JSON.parse(e.data);
+  appendLog(log.message);
+};
+```
+
+### 5. 프로젝트 라이프사이클
+
+AI가 프로젝트를 단계별로 진행합니다.
+
+```typescript
+const PROJECT_LIFECYCLE = {
+  PRD: {
+    documents: ['PRD.md'],
+    nextPhase: 'STORYBOARD'
+  },
+  STORYBOARD: {
+    documents: ['STORYBOARD.md', 'UI_MOCKUP.md'],
+    nextPhase: 'ARCHITECTURE'
+  },
+  ARCHITECTURE: {
+    documents: ['ARCHITECTURE.md'],
+    nextPhase: 'IMPLEMENTATION'
+  },
+  IMPLEMENTATION: {
+    artifacts: ['src/**'],
+    nextPhase: 'TESTING'
+  },
+  TESTING: {
+    documents: ['TEST_REPORT.md'],
+    nextPhase: 'DEPLOYMENT'
+  },
+  DEPLOYMENT: {
+    documents: ['DEPLOYMENT.md'],
+    nextPhase: null
+  }
+};
+```
+
+## 데이터베이스 스키마
+
+```prisma
+model Task {
+  id          String     @id @default(uuid())
+  userId      String
+  categoryId  String?
+  title       String     @db.VarChar(200)
+  description String?    @db.Text
+  status      TaskStatus @default(TODO)      // TODO, IN_PROGRESS, IN_REVIEW, DONE
+  priority    Priority   @default(MEDIUM)    // URGENT, HIGH, MEDIUM, LOW
+  dueDate     DateTime?
+  isDeleted   Boolean    @default(false)     // Soft Delete
+
+  user      User       @relation(...)
+  category  Category?  @relation(...)
+  subtasks  Subtask[]
+  taskTags  TaskTag[]
+  reminders Reminder[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model ExecutionJob {
+  id          String    @id @default(uuid())
+  projectId   String
+  status      JobStatus @default(PENDING)
+  prompt      String    @db.Text
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+
+  project Project        @relation(...)
+  logs    ExecutionLog[]
+
+  @@index([status])
+}
+```
+
+## 칸반 보드 구현
+
+@dnd-kit으로 드래그 앤 드롭을 구현했습니다.
+
+```tsx
+import { DndContext, closestCorners } from "@dnd-kit/core";
+import { SortableContext, arrayMove } from "@dnd-kit/sortable";
+
+function KanbanBoard() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    // 같은 컬럼 내 이동
+    if (active.data.current?.status === over.data.current?.status) {
+      setTasks(tasks => arrayMove(tasks, oldIndex, newIndex));
+    } else {
+      // 다른 컬럼으로 이동 → 상태 변경
+      updateTask({ id: active.id, status: over.data.current?.status });
+    }
+  };
+
+  return (
+    <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <div className="flex gap-4">
+        {['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'DONE'].map(status => (
+          <KanbanColumn key={status} status={status} tasks={filterByStatus(status)} />
+        ))}
+      </div>
+    </DndContext>
+  );
+}
+```
+
+## 테스팅
+
+### Unit Test (Vitest)
+
+```typescript
+describe('Button', () => {
+  it('should call onClick when clicked', () => {
+    const handler = vi.fn();
+    render(<Button onClick={handler}>Click</Button>);
+    fireEvent.click(screen.getByRole('button'));
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+### E2E Test (Playwright)
+
+```typescript
+test('should create a new task', async ({ page }) => {
+  await page.goto('/tasks');
+  await page.click('button:has-text("새 작업")');
+  await page.fill('input[name="title"]', '테스트 작업');
+  await page.click('button:has-text("저장")');
+  await expect(page.locator('text=테스트 작업')).toBeVisible();
+});
+```
+
+## 성능 최적화
+
+### Frontend
+- Route-based code splitting (`React.lazy`)
+- Component memoization (`React.memo`, `useMemo`, `useCallback`)
+- React Query stale time 5분 설정
+
+### Backend
+- Database indexing (userId, status, dueDate)
+- Selective field retrieval (Prisma select)
+- Pagination (skip/take)
+
+## 폴더 구조
+
+```
+todolist/
+├── apps/
+│   ├── web/                    # React Frontend (Port 3000)
+│   │   ├── src/
+│   │   │   ├── pages/          # Route 컴포넌트
+│   │   │   ├── components/     # UI 컴포넌트
+│   │   │   ├── hooks/          # Custom Hooks
+│   │   │   ├── stores/         # Zustand Stores
+│   │   │   └── lib/            # API Client, Utils
+│   │   └── e2e/                # Playwright Tests
+│   │
+│   └── api/                    # Express Backend (Port 4000)
+│       ├── src/
+│       │   ├── controllers/    # HTTP Handlers
+│       │   ├── services/       # Business Logic
+│       │   ├── repositories/   # Data Access
+│       │   ├── routes/         # Express Routes
+│       │   └── middlewares/    # Auth, Error
+│       └── prisma/             # Schema, Migrations
+│
+├── docs/
+│   ├── PRD.md                  # 요구사항 문서
+│   ├── TESTING.md              # 테스팅 가이드
+│   └── OPTIMIZATION.md         # 최적화 가이드
+│
+└── package.json                # pnpm Workspace
+```
+
+## 실행 방법
+
+```bash
+# 의존성 설치
+pnpm install
+
+# 환경 변수 설정
+cp .env.example .env
+
+# DB 설정
+pnpm db:push
+pnpm db:generate
+
+# 개발 서버
+pnpm dev  # Frontend (3000) + Backend (4000)
+
+# 테스트
+pnpm test        # Unit Tests
+pnpm test:e2e    # E2E Tests
+```
+
+## 배운 점
+
+1. **계층 분리의 가치**: Controller/Service/Repository 패턴으로 테스트와 유지보수가 쉬워집니다.
+
+2. **React Query가 정말 좋다**: 서버 상태 관리, 캐싱, 무효화가 자동으로 처리됩니다.
+
+3. **Zod 스키마 공유**: 프론트/백엔드에서 같은 스키마를 사용하면 타입 안전성이 보장됩니다.
+
+4. **AI Orchestrator의 가능성**: Claude Code를 자동으로 실행하면 반복 작업을 줄일 수 있습니다.
+
+## 다음 단계
+
+- [ ] 실시간 협업 (WebSocket)
+- [ ] 모바일 앱 (React Native)
+- [ ] Docker Compose 설정
+- [ ] CI/CD Pipeline
+
+---
+
+**GitHub**: [taskflow 저장소](https://github.com/taekyungbee/todolist)

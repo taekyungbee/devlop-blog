@@ -1,0 +1,316 @@
+---
+title: AI 트렌드 자동 수집 시스템 구축기 - YouTube RSS + Gemini 요약
+description: 28개 AI/개발 YouTube 채널의 영상을 자동으로 수집하고, Gemini API로 요약하고, Notion과 이메일로 배포하는 시스템을 만들었습니다.
+date: 2026-01-18
+category: ai
+tags: ["gemini", "youtube", "automation", "nextjs", "prisma", "notion"]
+published: true
+---
+
+## 왜 만들었나?
+
+AI 분야는 하루가 다르게 변화합니다. 주요 채널들의 영상을 매일 확인하기란 불가능에 가깝습니다.
+
+그래서 만들었습니다:
+- **28개 채널**에서 영상을 자동 수집
+- **Gemini API**로 자막 기반 요약 생성
+- **Notion 데이터베이스**에 자동 동기화
+- **이메일**로 일일 요약 발송
+
+## 시스템 아키텍처
+
+```
+YouTube RSS Feed (28개 채널)
+        ↓
+    수집 (Next.js API Route)
+        ↓
+    자막 추출 (youtubei.js)
+        ↓ (자막 없으면)
+    오디오 분석 (Gemini File API)
+        ↓
+    요약 생성 (Gemini 3 Flash)
+        ↓
+    DB 저장 (PostgreSQL + Prisma)
+        ↓
+    Notion 동기화 / 이메일 발송
+```
+
+## 구독 중인 채널 (28개)
+
+### 한국어 채널 (20개)
+- **개발**: 빌더 조쉬, 코드팩토리, 단테랩스, 노마드 코더, 조코딩, 코딩애플
+- **AI 전문**: 테디노트, 빵형의 개발도상국, 안될공학, 딥러닝 호형
+
+### 글로벌 채널 (8개)
+- Google for Developers, Fireship, Two Minute Papers, OpenAI, Web Dev Simplified
+
+## 핵심 구현
+
+### 1. YouTube RSS 수집
+
+YouTube는 각 채널마다 RSS 피드를 제공합니다. API 키 없이도 최신 영상을 가져올 수 있습니다.
+
+```typescript
+import Parser from "rss-parser";
+
+const parser = new Parser();
+const feed = await parser.parseURL(
+  `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`
+);
+
+feed.items.forEach(item => {
+  const videoId = item.id?.replace("yt:video:", "");
+  videos.push({
+    title: item.title,
+    link: `https://www.youtube.com/watch?v=${videoId}`,
+    pubDate: item.pubDate,
+    source: channelName,
+    thumbnail: `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`
+  });
+});
+```
+
+### 2. 3단계 Fallback 요약 시스템
+
+모든 영상에 자막이 있는 것은 아닙니다. 3단계 Fallback을 구현했습니다.
+
+```typescript
+async function summarizeVideo(video: VideoToSummarize) {
+  const videoId = extractVideoId(video.link);
+
+  // 1차: 자막 → Gemini 요약
+  const transcript = await getTranscript(videoId);
+  if (transcript) {
+    return await summarizeText(transcript, { title: video.title });
+  }
+
+  // 2차: 오디오 다운로드 → Gemini 분석
+  const audioSummary = await summarizeFromAudio(videoId, video.title);
+  if (audioSummary) {
+    return audioSummary;
+  }
+
+  // 3차: 영상 정보만으로 fallback
+  const videoInfo = await getVideoInfo(videoId);
+  return await summarizeFromVideoInfo(videoInfo);
+}
+```
+
+### 3. 오디오 분석 (Gemini File API)
+
+자막이 없는 영상은 오디오를 다운로드해서 Gemini에 직접 분석시킵니다.
+
+```typescript
+import { GoogleAIFileManager } from "@google/generative-ai/server";
+
+// 1. 오디오 다운로드 (youtubei.js 또는 ytdl-core)
+const audioPath = await downloadAudio(videoId);
+
+// 2. Gemini File API로 업로드
+const fileManager = new GoogleAIFileManager(GEMINI_API_KEY);
+const uploadResult = await fileManager.uploadFile(audioPath, {
+  mimeType: "audio/mpeg"
+});
+
+// 3. 오디오 분석
+const result = await model.generateContent([
+  { fileData: { mimeType: "audio/mpeg", fileUri: uploadResult.file.uri } },
+  { text: `이 오디오의 내용을 500자 이내로 요약해주세요. 영상 제목: ${title}` }
+]);
+
+// 4. 임시 파일 정리
+fs.unlinkSync(audioPath);
+```
+
+### 4. Gemini 요약 프롬프트
+
+일관된 형식의 요약을 위해 프롬프트를 정교하게 설계했습니다.
+
+```typescript
+const prompt = `다음 유튜브 영상 자막을 500자 이내로 요약해주세요.
+
+영상 제목: ${title}
+
+[출력 형식]
+(핵심 주제 1줄)
+(주요 내용 3-5개 bullet point)
+(결론/시사점 1줄)
+
+자막:
+${transcript.slice(0, 15000)}`;
+```
+
+### 5. Notion 동기화
+
+요약된 영상을 Notion 데이터베이스에 자동으로 추가합니다.
+
+```typescript
+import { Client } from "@notionhq/client";
+
+const notion = new Client({ auth: NOTION_TRENDS_API_KEY });
+
+// 페이지 생성
+const page = await notion.pages.create({
+  parent: { database_id: NOTION_TRENDS_DB_ID },
+  properties: {
+    Title: { title: [{ text: { content: video.title } }] },
+    Source: { select: { name: video.source } },
+    Link: { url: video.link },
+    PubDate: { date: { start: video.pubDate.toISOString().split("T")[0] } }
+  }
+});
+
+// 본문에 요약 내용 추가
+await notion.blocks.children.append({
+  block_id: page.id,
+  children: [
+    { type: "bookmark", bookmark: { url: video.link } },
+    { type: "divider", divider: {} },
+    ...summaryToBlocks(video.summary)  // bullet point 변환
+  ]
+});
+```
+
+### 6. 이메일 발송
+
+HTML 템플릿으로 깔끔한 이메일을 발송합니다.
+
+```typescript
+import nodemailer from "nodemailer";
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD
+  }
+});
+
+await transporter.sendMail({
+  from: GMAIL_USER,
+  to: GMAIL_USER,
+  subject: `🤖 AI Trends Daily - ${today} (${videos.length}개 영상)`,
+  html: generateEmailTemplate(videos)
+});
+```
+
+## API 엔드포인트
+
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `POST /api/trends/refresh` | YouTube RSS 수집 |
+| `POST /api/trends/summarize` | 영상 요약 생성 (limit 파라미터) |
+| `POST /api/trends/send-email` | 이메일 발송 |
+| `POST /api/trends/sync-notion` | Notion 동기화 |
+| `POST /api/trends/daily` | 전체 작업 한번에 실행 |
+
+## Rate Limit 관리
+
+Gemini Free Tier는 분당 15회 요청 제한이 있습니다.
+
+```typescript
+// 4.5초 간격으로 호출 (분당 약 13회)
+for (const video of videos) {
+  await summarizeAndSave(video);
+  await new Promise(r => setTimeout(r, 4500));
+}
+```
+
+## YouTube Shorts 정규화
+
+Shorts URL과 일반 URL을 같은 영상으로 인식하도록 정규화합니다.
+
+```typescript
+function normalizeYouTubeLink(link: string): string {
+  const shortsMatch = link.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
+  if (shortsMatch) {
+    return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+  }
+  return link;
+}
+```
+
+이렇게 하면 DB unique constraint에서 중복을 방지할 수 있습니다.
+
+## 데이터베이스 스키마
+
+```prisma
+model TrendVideo {
+  id        Int      @id @default(autoincrement())
+  title     String   @db.VarChar(500)
+  link      String   @unique @db.VarChar(1000)
+  pubDate   DateTime @map("pub_date")
+  source    String   @db.VarChar(100)      // 채널명
+  thumbnail String?  @db.VarChar(1000)
+  summary   String?  @db.Text              // Gemini 요약
+  emailSent Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([pubDate(sort: Desc)])
+  @@index([emailSent])
+  @@map("trend_videos")
+}
+
+model YouTubeChannel {
+  id        Int      @id @default(autoincrement())
+  channelId String   @unique @db.VarChar(30)
+  name      String   @db.VarChar(100)
+  category  String   @default("korean")    // korean | global
+  active    Boolean  @default(true)
+
+  @@map("youtube_channels")
+}
+```
+
+## 블로그와의 연동
+
+이 서비스(포트 7001)는 블로그(포트 7000)와 같은 PostgreSQL DB를 공유합니다.
+
+```
+ai-trends-collector (포트 7001)  ← 데이터 수집/요약
+        ↓
+   PostgreSQL (공유)
+        ↓
+devlop-blog (포트 7000)  ← 프론트엔드 렌더링
+```
+
+블로그의 `/trends` 페이지에서 수집된 영상들을 볼 수 있습니다.
+
+## 자동화 스케줄링
+
+로컬 환경에서는 node-cron을 사용합니다.
+
+```typescript
+import cron from "node-cron";
+
+// 매일 00:00 - 트렌드 수집
+cron.schedule("0 0 * * *", updateAiTrends);
+
+// 매일 01:00 - 영상 요약 (20개)
+cron.schedule("0 1 * * *", () => summarizeVideosBatch(20));
+
+// 매일 02:00 - Notion + 이메일
+cron.schedule("0 2 * * *", async () => {
+  await syncTodaySummariesToNotion();
+  await sendTrendsSummaryEmail();
+});
+```
+
+Cloud Run 배포 시에는 **Google Cloud Scheduler**를 사용합니다.
+
+## 성과
+
+- **일일 처리량**: 50~100개 영상
+- **요약 성공률**: 약 85% (자막 + 오디오 fallback)
+- **비용**: Gemini Free Tier로 무료 운영
+
+## 개선 계획
+
+- [ ] 실패한 요약 자동 재시도
+- [ ] Sentry 에러 모니터링
+- [ ] Slack 알림 연동
+- [ ] 요약 품질 평가 시스템
+
+---
+
+**GitHub**: [ai-trends-collector 저장소](https://github.com/taekyungbee/ai-trends-collector)

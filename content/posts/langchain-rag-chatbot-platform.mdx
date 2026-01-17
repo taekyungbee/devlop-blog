@@ -1,0 +1,255 @@
+---
+title: LangChain으로 만드는 실전 AI 챗봇 플랫폼 - 4개 프로젝트 통합기
+description: Naive RAG부터 Graph RAG까지, 12주 커리큘럼을 따라 구현한 4개의 AI 챗봇을 하나의 플랫폼으로 통합한 프로젝트를 소개합니다.
+date: 2026-01-18
+category: ai
+tags: ["langchain", "rag", "chatbot", "react", "fastapi", "gemini"]
+published: true
+---
+
+## 프로젝트 소개
+
+AI 챗봇 개발을 체계적으로 학습하고 싶었습니다. 단순히 API를 호출하는 수준이 아니라, **RAG(Retrieval-Augmented Generation)의 진화 과정**을 직접 구현해보고 싶었습니다.
+
+그래서 12주 커리큘럼을 설계하고, 4개의 실전 프로젝트를 만들었습니다:
+
+1. **주택청약 FAQ 챗봇** - Naive RAG
+2. **ETF 추천 시스템** - Advanced RAG (HyDE + Re-ranking)
+3. **법무 자문 에이전트** - Corrective RAG + LangGraph
+4. **기업 분석 에이전트** - Graph RAG + Neo4j
+
+그리고 이 4개의 독립 프로젝트를 **하나의 통합 플랫폼**으로 묶었습니다.
+
+🔗 **배포 URL**: https://ai-chat-bot-woa6zdvugq-du.a.run.app/
+
+## 기술 스택
+
+### Backend
+- **LangChain 0.3+** / **LangGraph 0.2+** - RAG 파이프라인
+- **FastAPI** - REST API, WebSocket
+- **ChromaDB / FAISS** - 벡터 저장소
+- **Neo4j** - 그래프 데이터베이스 (Project 4)
+
+### Frontend
+- **React 19** + **Vite 7** + **Tailwind 4**
+- **Zustand** - 상태 관리
+- **react-markdown** - Markdown 렌더링
+
+### LLM Provider
+- OpenAI (GPT-4o)
+- Anthropic (Claude Sonnet)
+- **Google Gemini 3 Flash** (운영 환경 - 무료 티어 활용)
+- Ollama (로컬)
+
+## RAG의 진화 - 4단계 구현
+
+### 1단계: Naive RAG (주택청약 FAQ)
+
+가장 기본적인 RAG 구조입니다. 문서를 청크로 분할하고, 임베딩해서 벡터 DB에 저장합니다.
+
+```python
+from langchain.vectorstores import Chroma
+from langchain.chains import RetrievalQA
+
+# 문서 로드 및 분할
+documents = load_documents("housing_faq.json")
+chunks = text_splitter.split_documents(documents)
+
+# 벡터 저장소 생성
+vectorstore = Chroma.from_documents(chunks, embeddings)
+
+# RAG 체인 구성
+chain = RetrievalQA.from_chain_type(
+    llm=llm,
+    retriever=vectorstore.as_retriever(k=4),
+    return_source_documents=True
+)
+```
+
+**한계점**: 검색 품질이 쿼리 표현에 크게 의존합니다.
+
+### 2단계: Advanced RAG (ETF 추천)
+
+검색 품질을 높이기 위해 두 가지 기법을 추가했습니다.
+
+**HyDE (Hypothetical Document Embeddings)**:
+사용자 질문으로 "가상의 이상적인 답변"을 먼저 생성하고, 그 답변으로 검색합니다.
+
+```python
+# 가상 답변 생성
+hypothetical_answer = llm.invoke(f"다음 질문에 대한 이상적인 답변을 작성하세요: {query}")
+
+# 가상 답변으로 검색 (질문보다 관련 문서와 유사도가 높음)
+relevant_docs = vectorstore.similarity_search(hypothetical_answer)
+```
+
+**Re-ranking**:
+1차 검색 결과를 Cross-encoder로 재정렬합니다.
+
+```python
+from sentence_transformers import CrossEncoder
+
+reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+
+# 1차 검색 (빠르지만 덜 정확)
+candidates = vectorstore.similarity_search(query, k=20)
+
+# 2차 재정렬 (느리지만 정확)
+scores = reranker.predict([(query, doc.page_content) for doc in candidates])
+reranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)[:4]
+```
+
+### 3단계: Corrective RAG (법무 자문)
+
+검색 결과의 **관련성을 평가**하고, 관련성이 낮으면 **쿼리를 재작성**합니다.
+
+```python
+from langgraph.graph import StateGraph
+
+def grade_documents(state):
+    """검색된 문서의 관련성 평가"""
+    relevant_docs = []
+    for doc in state["documents"]:
+        score = grader.invoke({"query": state["query"], "document": doc})
+        if score == "relevant":
+            relevant_docs.append(doc)
+    return {"documents": relevant_docs, "needs_rewrite": len(relevant_docs) < 2}
+
+def rewrite_query(state):
+    """관련성 낮으면 쿼리 재작성"""
+    new_query = rewriter.invoke(f"더 나은 검색을 위해 다음 질문을 재작성하세요: {state['query']}")
+    return {"query": new_query}
+
+# LangGraph 워크플로우
+workflow = StateGraph(State)
+workflow.add_node("retrieve", retrieve_documents)
+workflow.add_node("grade", grade_documents)
+workflow.add_node("rewrite", rewrite_query)
+workflow.add_conditional_edges(
+    "grade",
+    lambda s: "rewrite" if s["needs_rewrite"] else "generate",
+    {"rewrite": "rewrite", "generate": "generate"}
+)
+```
+
+**Tool Calling**도 추가했습니다:
+- 상속 계산기 (법정 상속분 자동 계산)
+- 소멸시효 조회 (청구권 유형별)
+
+### 4단계: Graph RAG (기업 분석)
+
+문서를 **엔티티-관계 그래프**로 구조화합니다. 관계 기반 질의가 가능해집니다.
+
+```python
+from neo4j import GraphDatabase
+
+# PDF 사업보고서에서 엔티티 추출
+entities = extract_entities(document)  # 회사, 인물, 금액 등
+relations = extract_relations(document)  # 경쟁사, 자회사, 공급망 등
+
+# Neo4j에 저장
+with driver.session() as session:
+    for entity in entities:
+        session.run("MERGE (e:Entity {name: $name, type: $type})", entity)
+    for rel in relations:
+        session.run("""
+            MATCH (a:Entity {name: $source}), (b:Entity {name: $target})
+            MERGE (a)-[r:RELATION {type: $type}]->(b)
+        """, rel)
+```
+
+**질의 예시**:
+- "삼성전자의 주요 경쟁사는?"
+- "이 회사와 공급망 관계에 있는 기업들을 알려줘"
+
+## 통합 플랫폼 아키텍처
+
+4개 프로젝트를 하나의 포트(8080)로 통합했습니다.
+
+```
+Frontend (React SPA)
+    ↓
+FastAPI (통합 API 서버)
+├── /api/v1/housing  → Project 1
+├── /api/v1/etf      → Project 2
+├── /api/v1/legal    → Project 3
+└── /api/v1/enterprise → Project 4
+```
+
+### Lazy Initialization
+
+각 서비스는 **첫 요청 시에만 초기화**됩니다. 하나의 서비스가 실패해도 다른 서비스는 정상 동작합니다.
+
+```python
+class HousingService:
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls._initialize()
+        return cls._instance
+```
+
+### Factory 패턴으로 LLM 추상화
+
+프로바이더 교체가 쉽습니다.
+
+```python
+llm = LLMFactory.create(
+    provider="gemini",  # or "openai", "anthropic", "ollama"
+    model_name="gemini-2.0-flash",
+    temperature=0.7
+)
+```
+
+운영 환경에서는 **Gemini 무료 티어**를 사용해 비용을 절감했습니다.
+
+## UI/UX 개선
+
+ChatGPT/Claude 수준의 채팅 UI를 목표로 했습니다.
+
+- **Portal 기반 Modal**: overflow-hidden 문제 해결
+- **다크모드**: Tailwind `darkMode: 'class'` + localStorage
+- **Markdown 렌더링**: react-markdown + 코드 블록 복사 버튼
+- **스켈레톤 UI**: 로딩 상태 개선
+- **WebSocket 스트리밍**: 실시간 응답
+
+## 배포
+
+Docker 멀티 스테이지 빌드로 이미지 크기를 최소화했습니다.
+
+```dockerfile
+# Stage 1: Frontend 빌드
+FROM node:20-alpine AS frontend-builder
+COPY frontend/ ./
+RUN npm run build
+
+# Stage 2: Python + 빌드된 Frontend
+FROM python:3.11-slim
+COPY --from=frontend-builder /app/dist ./unified_app/static/
+CMD ["uvicorn", "unified_app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+```
+
+GitHub Actions로 `main` 브랜치 푸시 시 Cloud Run에 자동 배포됩니다.
+
+## 배운 점
+
+1. **RAG는 만능이 아니다**: 검색 품질이 답변 품질을 결정합니다. HyDE, Re-ranking, Corrective RAG 같은 기법이 필요합니다.
+
+2. **LangGraph가 강력하다**: 복잡한 워크플로우를 시각적으로 설계할 수 있습니다. Agent 개발에 필수입니다.
+
+3. **Factory 패턴의 가치**: LLM 프로바이더를 환경 변수로 쉽게 교체할 수 있어 비용 최적화가 가능합니다.
+
+4. **Gemini 무료 티어**: 분당 15회 요청이면 개인 프로젝트에 충분합니다.
+
+## 다음 단계
+
+- [ ] 대화 저장/불러오기
+- [ ] 사용자 피드백 시스템 (좋아요/싫어요)
+- [ ] 음성 입력 (Web Speech API)
+- [ ] 프론트엔드 테스트 (Vitest, Playwright)
+
+---
+
+**GitHub**: [ai-chat-bot 저장소](https://github.com/taekyungbee/ai-chat-bot)
