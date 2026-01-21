@@ -143,22 +143,32 @@ export interface YouTubeChannelData {
 }
 
 export async function getActiveChannels(): Promise<YouTubeChannelData[]> {
-  const channels = await prisma.youTubeChannel.findMany({
-    where: { active: true },
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
+  try {
+    const channels = await prisma.youTubeChannel.findMany({
+      where: { active: true },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    });
 
-  return channels.map((c) => ({
-    channelId: c.channelId,
-    name: c.name,
-    category: c.category as "korean" | "global",
-  }));
+    return channels.map((c) => ({
+      channelId: c.channelId,
+      name: c.name,
+      category: c.category as "korean" | "global",
+    }));
+  } catch {
+    console.warn("[db.ts] youTubeChannel 조회 실패 - 빈 배열 반환");
+    return [];
+  }
 }
 
 export async function getAllChannels() {
-  return prisma.youTubeChannel.findMany({
-    orderBy: [{ category: "asc" }, { name: "asc" }],
-  });
+  try {
+    return await prisma.youTubeChannel.findMany({
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    });
+  } catch {
+    console.warn("[db.ts] youTubeChannel 전체 조회 실패 - 빈 배열 반환");
+    return [];
+  }
 }
 
 // 비디오를 채널별로 그룹화해서 조회
