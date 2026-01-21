@@ -23,19 +23,25 @@ export interface PaginatedResult<T> {
 }
 
 export async function getVideosFromDb(limit = 10): Promise<DbTrendItem[]> {
-  const videos = await prisma.trendVideo.findMany({
-    orderBy: { pubDate: "desc" },
-    take: limit,
-  });
+  try {
+    const videos = await prisma.trendVideo.findMany({
+      orderBy: { pubDate: "desc" },
+      take: limit,
+    });
 
-  return videos.map((v) => ({
-    title: v.title,
-    link: v.link,
-    pubDate: v.pubDate.toISOString(),
-    source: v.source,
-    thumbnail: v.thumbnail ?? undefined,
-    summary: v.summary ?? undefined,
-  }));
+    return videos.map((v) => ({
+      title: v.title,
+      link: v.link,
+      pubDate: v.pubDate.toISOString(),
+      source: v.source,
+      thumbnail: v.thumbnail ?? undefined,
+      summary: v.summary ?? undefined,
+    }));
+  } catch {
+    // 테이블이 없거나 DB 오류 시 빈 배열 반환
+    console.warn("[db.ts] trendVideo 조회 실패 - 빈 배열 반환");
+    return [];
+  }
 }
 
 export async function getVideosPaginated(
@@ -43,75 +49,90 @@ export async function getVideosPaginated(
   pageSize = 20,
   source?: string
 ): Promise<PaginatedResult<DbTrendItem>> {
-  const where = source ? { source } : {};
+  try {
+    const where = source ? { source } : {};
 
-  const [videos, total] = await Promise.all([
-    prisma.trendVideo.findMany({
-      where,
-      orderBy: { pubDate: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.trendVideo.count({ where }),
-  ]);
+    const [videos, total] = await Promise.all([
+      prisma.trendVideo.findMany({
+        where,
+        orderBy: { pubDate: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.trendVideo.count({ where }),
+    ]);
 
-  return {
-    items: videos.map((v) => ({
-      title: v.title,
-      link: v.link,
-      pubDate: v.pubDate.toISOString(),
-      source: v.source,
-      thumbnail: v.thumbnail ?? undefined,
-      summary: v.summary ?? undefined,
-    })),
-    total,
-    page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  };
+    return {
+      items: videos.map((v) => ({
+        title: v.title,
+        link: v.link,
+        pubDate: v.pubDate.toISOString(),
+        source: v.source,
+        thumbnail: v.thumbnail ?? undefined,
+        summary: v.summary ?? undefined,
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  } catch {
+    console.warn("[db.ts] trendVideo paginated 조회 실패 - 빈 결과 반환");
+    return { items: [], total: 0, page, pageSize, totalPages: 0 };
+  }
 }
 
 export async function getNewsFromDb(limit = 10): Promise<DbTrendItem[]> {
-  const news = await prisma.trendNews.findMany({
-    orderBy: { pubDate: "desc" },
-    take: limit,
-  });
+  try {
+    const news = await prisma.trendNews.findMany({
+      orderBy: { pubDate: "desc" },
+      take: limit,
+    });
 
-  return news.map((n) => ({
-    title: n.title,
-    link: n.link,
-    pubDate: n.pubDate.toISOString(),
-    source: n.source,
-    summary: n.summary ?? undefined,
-  }));
+    return news.map((n) => ({
+      title: n.title,
+      link: n.link,
+      pubDate: n.pubDate.toISOString(),
+      source: n.source,
+      summary: n.summary ?? undefined,
+    }));
+  } catch {
+    console.warn("[db.ts] trendNews 조회 실패 - 빈 배열 반환");
+    return [];
+  }
 }
 
 export async function getNewsPaginated(
   page = 1,
   pageSize = 20
 ): Promise<PaginatedResult<DbTrendItem>> {
-  const [news, total] = await Promise.all([
-    prisma.trendNews.findMany({
-      orderBy: { pubDate: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.trendNews.count(),
-  ]);
+  try {
+    const [news, total] = await Promise.all([
+      prisma.trendNews.findMany({
+        orderBy: { pubDate: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.trendNews.count(),
+    ]);
 
-  return {
-    items: news.map((n) => ({
-      title: n.title,
-      link: n.link,
-      pubDate: n.pubDate.toISOString(),
-      source: n.source,
-      summary: n.summary ?? undefined,
-    })),
-    total,
-    page,
-    pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  };
+    return {
+      items: news.map((n) => ({
+        title: n.title,
+        link: n.link,
+        pubDate: n.pubDate.toISOString(),
+        source: n.source,
+        summary: n.summary ?? undefined,
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  } catch {
+    console.warn("[db.ts] trendNews paginated 조회 실패 - 빈 결과 반환");
+    return { items: [], total: 0, page, pageSize, totalPages: 0 };
+  }
 }
 
 // YouTube Channel 조회
@@ -142,26 +163,31 @@ export async function getAllChannels() {
 
 // 비디오를 채널별로 그룹화해서 조회
 export async function getVideosBySource(limit = 5): Promise<Record<string, DbTrendItem[]>> {
-  const videos = await prisma.trendVideo.findMany({
-    orderBy: { pubDate: "desc" },
-    take: 100,
-  });
+  try {
+    const videos = await prisma.trendVideo.findMany({
+      orderBy: { pubDate: "desc" },
+      take: 100,
+    });
 
-  const grouped: Record<string, DbTrendItem[]> = {};
-  for (const v of videos) {
-    if (!grouped[v.source]) {
-      grouped[v.source] = [];
+    const grouped: Record<string, DbTrendItem[]> = {};
+    for (const v of videos) {
+      if (!grouped[v.source]) {
+        grouped[v.source] = [];
+      }
+      if (grouped[v.source].length < limit) {
+        grouped[v.source].push({
+          title: v.title,
+          link: v.link,
+          pubDate: v.pubDate.toISOString(),
+          source: v.source,
+          thumbnail: v.thumbnail ?? undefined,
+        });
+      }
     }
-    if (grouped[v.source].length < limit) {
-      grouped[v.source].push({
-        title: v.title,
-        link: v.link,
-        pubDate: v.pubDate.toISOString(),
-        source: v.source,
-        thumbnail: v.thumbnail ?? undefined,
-      });
-    }
+
+    return grouped;
+  } catch {
+    console.warn("[db.ts] trendVideo bySource 조회 실패 - 빈 객체 반환");
+    return {};
   }
-
-  return grouped;
 }
