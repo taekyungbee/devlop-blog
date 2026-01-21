@@ -3,12 +3,29 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// 환경변수에서 DB URL 구성 (특수문자 비밀번호 지원)
+function getDatabaseUrl(): string {
+  // DATABASE_URL이 있으면 그대로 사용 (Cloud Run 등)
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+
+  // 분리된 환경변수로 URL 구성
+  const host = process.env.DB_HOST;
+  const port = process.env.DB_PORT || "5432";
+  const name = process.env.DB_NAME;
+  const user = process.env.DB_USER;
+  const password = encodeURIComponent(process.env.DB_PASSWORD || "");
+
+  return `postgresql://${user}:${password}@${host}:${port}/${name}`;
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: getDatabaseUrl(),
   },
 });
