@@ -1,6 +1,6 @@
 import { siteConfig } from "@/config/site";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui";
 
 export const metadata = {
   title: "About",

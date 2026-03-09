@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 const categoryConfig: Record<string, { label: string; className: string }> = {

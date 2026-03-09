@@ -1,0 +1,7 @@
+{
+  "active": true,
+  "started_at": "2026-01-31T14:05:10.431Z",
+  "original_prompt": "/ultrawork 포트폴리오 RAG 챗봇 구현. 1) /api/chat API 라우트 (pgvector 192.168.0.67:5433 portfolio_rag/rag, Ollama 11434 nomic-embed-text+llama3.2, 스트리밍) 2) 챗봇 UI 컴포넌트 (ChatBot, ChatWindow, ChatInput, ChatMessage) 3) 플로팅 버튼 우하단 4) 다크/라이트 모드. ai-chat-bot 데모 참고하되 새로 작성",
+  "reinforcement_count": 0,
+  "last_checked_at": "2026-01-31T14:05:10.431Z"
+}

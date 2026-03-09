@@ -1,15 +1,27 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import Image from "next/image";
-import { Search, X, Loader2 } from "lucide-react";
-import { TrendItem } from "@/lib/ai-trends";
+import { Search, X, Loader2, Sparkles } from "lucide-react";
 import { YouTubeChannelData, DbTrendItem, PaginatedResult } from "@/lib/db";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui";
+import { Badge } from "@/components/ui";
+import { Input } from "@/components/ui";
+import { Button } from "@/components/ui";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui";
+
+interface RagSearchResult {
+  id: string;
+  title: string;
+  content: string;
+  url: string;
+  score: number;
+  sourceType: string;
+  summary: string;
+  metadata: Record<string, unknown>;
+  tags: string[];
+  publishedAt: string;
+}
 
 interface TrendsClientProps {
   initialVideos: PaginatedResult<DbTrendItem>;
@@ -21,6 +33,12 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<"all" | "korean" | "global">("all");
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
+
+  // 벡터 검색 상태
+  const [isVectorSearch, setIsVectorSearch] = useState(false);
+  const [vectorResults, setVectorResults] = useState<DbTrendItem[]>([]);
+  const [vectorSearching, setVectorSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Videos pagination state
   const [videos, setVideos] = useState<DbTrendItem[]>(initialVideos.items);
@@ -39,6 +57,60 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
   // 채널을 카테고리별로 그룹화
   const koreanChannels = channels.filter((c) => c.category === "korean");
   const globalChannels = channels.filter((c) => c.category === "global");
+
+  // 벡터 검색 실행 (디바운스)
+  useEffect(() => {
+    if (!isVectorSearch || !searchQuery.trim()) {
+      setVectorResults([]);
+      return;
+    }
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setVectorSearching(true);
+      try {
+        const res = await fetch("/api/trends/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: searchQuery,
+            limit: 30,
+          }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.data?.results) {
+          const items: DbTrendItem[] = data.data.results.map(
+            (r: RagSearchResult) => ({
+              title: r.title,
+              link: r.url,
+              pubDate: r.publishedAt,
+              source:
+                (r.metadata?.source as string) ??
+                r.tags[0] ??
+                r.sourceType,
+              thumbnail: (r.metadata?.thumbnail as string) ?? undefined,
+              summary: r.summary || undefined,
+            })
+          );
+          setVectorResults(items);
+        }
+      } catch (error) {
+        console.error("Vector search failed:", error);
+      } finally {
+        setVectorSearching(false);
+      }
+    }, 500);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [isVectorSearch, searchQuery]);
 
   // 채널 선택 시 서버에서 새로 조회
   useEffect(() => {
@@ -70,7 +142,7 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
     fetchVideosForSource();
   }, [selectedSource]);
 
-  // 검색 및 필터링된 비디오 (서버에서 source 필터링 완료, 클라이언트에서 카테고리/검색어만 필터)
+  // 검색 및 필터링된 비디오
   const filteredVideos = useMemo(() => {
     let result = videos;
 
@@ -82,8 +154,8 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
       result = result.filter((v) => channelNames.includes(v.source));
     }
 
-    // 검색어 필터
-    if (searchQuery.trim()) {
+    // 일반 텍스트 검색 (벡터 검색 모드가 아닐 때)
+    if (searchQuery.trim() && !isVectorSearch) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
         (v) =>
@@ -93,11 +165,11 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
     }
 
     return result;
-  }, [videos, selectedCategory, selectedSource, searchQuery, channels]);
+  }, [videos, selectedCategory, selectedSource, searchQuery, channels, isVectorSearch]);
 
   // 검색 및 필터링된 뉴스
   const filteredNews = useMemo(() => {
-    if (!searchQuery.trim()) return news;
+    if (!searchQuery.trim() || isVectorSearch) return news;
 
     const query = searchQuery.toLowerCase();
     return news.filter(
@@ -105,7 +177,7 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
         n.title.toLowerCase().includes(query) ||
         n.source.toLowerCase().includes(query)
     );
-  }, [news, searchQuery]);
+  }, [news, searchQuery, isVectorSearch]);
 
   // Load more videos
   const loadMoreVideos = useCallback(async () => {
@@ -161,9 +233,23 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
     setSearchQuery("");
     setSelectedCategory("all");
     setSelectedSource(null);
+    setIsVectorSearch(false);
+    setVectorResults([]);
   };
 
-  const hasActiveFilters = searchQuery || selectedCategory !== "all" || selectedSource;
+  const hasActiveFilters = searchQuery || selectedCategory !== "all" || selectedSource || isVectorSearch;
+
+  // 벡터 검색 모드일 때 표시할 항목
+  const displayVideos = isVectorSearch && searchQuery.trim()
+    ? vectorResults.filter((r) => {
+        // YouTube 소스인지 판단 (thumbnail이 있으면 비디오로 간주)
+        return r.thumbnail !== undefined;
+      })
+    : filteredVideos;
+
+  const displayNews = isVectorSearch && searchQuery.trim()
+    ? vectorResults.filter((r) => r.thumbnail === undefined)
+    : filteredNews;
 
   return (
     <div className="container max-w-6xl py-10 lg:py-16 space-y-8">
@@ -186,12 +272,24 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="검색어를 입력하세요..."
+            placeholder={isVectorSearch ? "AI 벡터 검색..." : "검색어를 입력하세요..."}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
             className="pl-10"
           />
+          {vectorSearching && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+          )}
         </div>
+        <Button
+          variant={isVectorSearch ? "default" : "outline"}
+          onClick={() => setIsVectorSearch(!isVectorSearch)}
+          className="gap-2"
+          title="AI 벡터 검색: 의미 기반으로 관련도 높은 결과를 찾습니다"
+        >
+          <Sparkles className="w-4 h-4" />
+          AI 검색
+        </Button>
         {hasActiveFilters && (
           <Button variant="outline" onClick={clearFilters} className="gap-2">
             <X className="w-4 h-4" />
@@ -200,150 +298,116 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
         )}
       </div>
 
-      {/* Category Tabs */}
-      <Tabs value={selectedCategory} onValueChange={(v) => {
-        setSelectedCategory(v as "all" | "korean" | "global");
-        setSelectedSource(null);
-      }}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="all">전체</TabsTrigger>
-          <TabsTrigger value="korean">한국 채널</TabsTrigger>
-          <TabsTrigger value="global">글로벌 채널</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* 벡터 검색 안내 */}
+      {isVectorSearch && (
+        <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg px-4 py-3 border border-border/50">
+          <Sparkles className="w-4 h-4 inline mr-2 text-primary" />
+          <strong>AI 검색 모드</strong>: 의미 기반 벡터 검색으로 관련도 높은 결과를 찾습니다. 자연어로 검색해보세요.
+        </div>
+      )}
 
-      {/* Channel Filter */}
-      <div className="flex flex-wrap gap-2">
-        {(selectedCategory === "all" ? channels : selectedCategory === "korean" ? koreanChannels : globalChannels).map((channel) => (
-          <Badge
-            key={channel.channelId}
-            variant={selectedSource === channel.name ? "default" : "outline"}
-            className="cursor-pointer hover:bg-primary/20 transition-colors"
-            onClick={() => setSelectedSource(selectedSource === channel.name ? null : channel.name)}
-          >
-            {channel.name}
-          </Badge>
-        ))}
-      </div>
+      {/* Category Tabs - 벡터 검색 모드가 아닐 때만 표시 */}
+      {!isVectorSearch && (
+        <>
+          <Tabs value={selectedCategory} onValueChange={(v: string) => {
+            setSelectedCategory(v as "all" | "korean" | "global");
+            setSelectedSource(null);
+          }}>
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all">전체</TabsTrigger>
+              <TabsTrigger value="korean">한국 채널</TabsTrigger>
+              <TabsTrigger value="global">글로벌 채널</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Channel Filter */}
+          <div className="flex flex-wrap gap-2">
+            {(selectedCategory === "all" ? channels : selectedCategory === "korean" ? koreanChannels : globalChannels).map((channel) => (
+              <Badge
+                key={channel.channelId}
+                variant={selectedSource === channel.name ? "default" : "outline"}
+                className="cursor-pointer hover:bg-primary/20 transition-colors"
+                onClick={() => setSelectedSource(selectedSource === channel.name ? null : channel.name)}
+              >
+                {channel.name}
+              </Badge>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="border-t border-border/40" />
 
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Videos Section - 2 columns */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <span className="text-red-500">▶</span> Videos
-              <span className="text-sm font-normal text-muted-foreground">
-                ({filteredVideos.length} / {videosTotal})
-              </span>
-            </h2>
-          </div>
+      {/* 벡터 검색 결과 */}
+      {isVectorSearch && searchQuery.trim() ? (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-primary" />
+            검색 결과
+            <span className="text-sm font-normal text-muted-foreground">
+              ({vectorResults.length}건)
+            </span>
+          </h2>
 
-          {filteredVideos.length === 0 ? (
+          {vectorSearching ? (
+            <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              검색 중...
+            </div>
+          ) : vectorResults.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               검색 결과가 없습니다.
             </div>
           ) : (
-            <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {filteredVideos.map((video, i) => (
-                  <VideoCard key={`${video.link}-${i}`} video={video} />
-                ))}
-              </div>
-
-              {/* Load More Button */}
-              {videosPage < videosTotalPages && !searchQuery && (
-                <div className="flex justify-center pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={loadMoreVideos}
-                    disabled={videosLoading}
-                    className="gap-2"
-                  >
-                    {videosLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        로딩 중...
-                      </>
-                    ) : (
-                      <>더 보기 ({videosPage}/{videosTotalPages})</>
-                    )}
-                  </Button>
-                </div>
-              )}
-            </>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {vectorResults.map((item, i) => (
+                <VectorResultCard key={`${item.link}-${i}`} item={item} />
+              ))}
+            </div>
           )}
         </div>
+      ) : (
+        /* Main Content - 기존 레이아웃 */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Videos Section - 2 columns */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <span className="text-red-500">▶</span> Videos
+                <span className="text-sm font-normal text-muted-foreground">
+                  ({displayVideos.length} / {videosTotal})
+                </span>
+              </h2>
+            </div>
 
-        {/* News Section - 1 column */}
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <span className="text-blue-500">📰</span> News
-            <span className="text-sm font-normal text-muted-foreground">
-              ({filteredNews.length} / {newsTotal})
-            </span>
-          </h2>
-
-          <div className="space-y-4">
-            {filteredNews.length === 0 ? (
+            {displayVideos.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 검색 결과가 없습니다.
               </div>
             ) : (
               <>
-                <div className="grid gap-4">
-                  {filteredNews.map((item, i) => (
-                    <Card
-                      key={`${item.link}-${i}`}
-                      className="bg-background/40 backdrop-blur border-muted/50 hover:bg-muted/50 transition-colors"
-                    >
-                      <a
-                        href={item.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block p-4"
-                      >
-                        <h4 className="font-medium hover:text-primary transition-colors line-clamp-2 text-sm">
-                          {item.title}
-                        </h4>
-                        {item.summary && (
-                          <p className="mt-2 text-xs text-muted-foreground line-clamp-3 italic opacity-80">
-                            {item.summary}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-5 px-1.5 font-normal"
-                          >
-                            {item.source}
-                          </Badge>
-                          <time>{new Date(item.pubDate).toLocaleDateString()}</time>
-                        </div>
-                      </a>
-                    </Card>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {displayVideos.map((video, i) => (
+                    <VideoCard key={`${video.link}-${i}`} video={video} />
                   ))}
                 </div>
 
-                {/* Load More Button for News */}
-                {newsPage < newsTotalPages && !searchQuery && (
+                {/* Load More Button */}
+                {videosPage < videosTotalPages && !searchQuery && (
                   <div className="flex justify-center pt-4">
                     <Button
-                      variant="ghost"
-                      onClick={loadMoreNews}
-                      disabled={newsLoading}
-                      className="w-full gap-2"
-                      size="sm"
+                      variant="outline"
+                      onClick={loadMoreVideos}
+                      disabled={videosLoading}
+                      className="gap-2"
                     >
-                      {newsLoading ? (
+                      {videosLoading ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
                           로딩 중...
                         </>
                       ) : (
-                        <>더 보기 ({newsPage}/{newsTotalPages})</>
+                        <>더 보기 ({videosPage}/{videosTotalPages})</>
                       )}
                     </Button>
                   </div>
@@ -351,8 +415,84 @@ export function TrendsClient({ initialVideos, initialNews, channels }: TrendsCli
               </>
             )}
           </div>
+
+          {/* News Section - 1 column */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <span className="text-blue-500">📰</span> News
+              <span className="text-sm font-normal text-muted-foreground">
+                ({displayNews.length} / {newsTotal})
+              </span>
+            </h2>
+
+            <div className="space-y-4">
+              {displayNews.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  검색 결과가 없습니다.
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-4">
+                    {displayNews.map((item, i) => (
+                      <Card
+                        key={`${item.link}-${i}`}
+                        className="bg-background/40 backdrop-blur border-muted/50 hover:bg-muted/50 transition-colors"
+                      >
+                        <a
+                          href={item.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-4"
+                        >
+                          <h4 className="font-medium hover:text-primary transition-colors line-clamp-2 text-sm">
+                            {item.title}
+                          </h4>
+                          {item.summary && (
+                            <p className="mt-2 text-xs text-muted-foreground line-clamp-3 italic opacity-80">
+                              {item.summary}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-5 px-1.5 font-normal"
+                            >
+                              {item.source}
+                            </Badge>
+                            <time>{new Date(item.pubDate).toLocaleDateString()}</time>
+                          </div>
+                        </a>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Load More Button for News */}
+                  {newsPage < newsTotalPages && !searchQuery && (
+                    <div className="flex justify-center pt-4">
+                      <Button
+                        variant="ghost"
+                        onClick={loadMoreNews}
+                        disabled={newsLoading}
+                        className="w-full gap-2"
+                        size="sm"
+                      >
+                        {newsLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            로딩 중...
+                          </>
+                        ) : (
+                          <>더 보기 ({newsPage}/{newsTotalPages})</>
+                        )}
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -395,6 +535,54 @@ function VideoCard({ video }: { video: DbTrendItem }) {
             </Badge>
             <time className="text-xs text-muted-foreground">
               {new Date(video.pubDate).toLocaleDateString()}
+            </time>
+          </div>
+        </div>
+      </Card>
+    </a>
+  );
+}
+
+function VectorResultCard({ item }: { item: DbTrendItem }) {
+  const isVideo = !!item.thumbnail;
+
+  return (
+    <a
+      href={item.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group block"
+    >
+      <Card className="overflow-hidden hover:bg-muted/50 transition-all border-none shadow-sm hover:shadow-lg bg-secondary/20 h-full">
+        {isVideo && item.thumbnail && (
+          <div className="relative aspect-video bg-muted">
+            <Image
+              src={item.thumbnail}
+              alt={item.title}
+              fill
+              className="object-cover transition-transform group-hover:scale-105"
+              unoptimized
+            />
+          </div>
+        )}
+        <div className="p-4 flex flex-col gap-2">
+          <h4 className="font-medium line-clamp-2 leading-tight group-hover:text-primary transition-colors text-sm">
+            {item.title}
+          </h4>
+          {item.summary && (
+            <p className="text-xs text-muted-foreground line-clamp-3 italic">
+              {item.summary}
+            </p>
+          )}
+          <div className="flex items-center justify-between mt-auto">
+            <Badge
+              variant={isVideo ? "secondary" : "outline"}
+              className="text-[10px] h-5 px-1.5"
+            >
+              {item.source}
+            </Badge>
+            <time className="text-xs text-muted-foreground">
+              {new Date(item.pubDate).toLocaleDateString()}
             </time>
           </div>
         </div>

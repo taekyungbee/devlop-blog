@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { siteConfig } from "@/config/site";
 import { formatDate } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui";
 import { MDXContent } from "@/components/mdx/mdx-content";
 import { GiscusComments } from "@/components/giscus-comments";
 import { TableOfContents } from "@/components/toc";
+import { RelatedResources } from "@/components/related-resources";
 import Link from "next/link";
 
 interface PostPageProps {
@@ -99,9 +100,13 @@ export default async function PostPage({ params }: PostPageProps) {
           <GiscusComments />
         </article>
 
-        {/* 우측 TOC 사이드바 */}
-        <aside className="hidden xl:block w-64 shrink-0">
+        {/* 우측 사이드바: TOC + 관련 자료 */}
+        <aside className="hidden xl:block w-64 shrink-0 space-y-8">
           <TableOfContents />
+          <RelatedResources
+            title={post.title}
+            tags={post.tags ?? []}
+          />
         </aside>
       </div>
     </div>

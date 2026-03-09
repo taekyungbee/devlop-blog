@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/components/ui";
 import { projects } from "#site/content";
 
 export const metadata = {
@@ -34,9 +34,9 @@ export default function ProjectsPage() {
       {sortedProjects.length > 0 ? (
         <div className="grid gap-6">
           {sortedProjects.map((project) => (
+            <Link key={project.slug} href={`/${project.slug}`} className="block">
             <Card
-              key={project.slug}
-              className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-primary/20 bg-background/60 backdrop-blur-md border-muted/50 hover:border-primary/50"
+              className="overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-primary/20 bg-background/60 backdrop-blur-md border-muted/50 hover:border-primary/50 cursor-pointer"
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -110,15 +110,13 @@ export default function ProjectsPage() {
                       Demo
                     </a>
                   )}
-                  <Link
-                    href={`/${project.slug}`}
-                    className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                  >
+                  <span className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1">
                     자세히 보기 →
-                  </Link>
+                  </span>
                 </div>
               </CardContent>
             </Card>
+            </Link>
           ))}
         </div>
       ) : (

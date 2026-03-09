@@ -1,5 +1,5 @@
 import { getAllTags } from "@/lib/posts";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui";
 import Link from "next/link";
 
 export const metadata = {

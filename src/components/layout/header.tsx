@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { SearchWrapper } from "@/components/search-wrapper";
 
@@ -49,6 +49,12 @@ export function Header() {
           </nav>
         </div>
         <div className="flex flex-1 items-center justify-end space-x-2">
+          <Link
+            href="/contact#booking"
+            className="hidden sm:inline-flex px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            미팅 예약
+          </Link>
           <SearchWrapper />
           <nav className="flex items-center">
             <Button variant="ghost" size="icon" asChild>

@@ -1,32 +1,28 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getStats } from "@/lib/rag-search";
 
+/**
+ * GET /api/trends/stats
+ * rag-collector 기반 트렌드 통계
+ */
 export async function GET() {
   try {
-    const videoCount = await prisma.trendVideo.count();
-    const newsCount = await prisma.trendNews.count();
-    const channelCount = await prisma.youTubeChannel.count({ where: { active: true } });
-
-    const latestVideo = await prisma.trendVideo.findFirst({ orderBy: { pubDate: "desc" } });
-    const oldestVideo = await prisma.trendVideo.findFirst({ orderBy: { pubDate: "asc" } });
-    const latestNews = await prisma.trendNews.findFirst({ orderBy: { pubDate: "desc" } });
-    const oldestNews = await prisma.trendNews.findFirst({ orderBy: { pubDate: "asc" } });
+    const stats = await getStats();
 
     return NextResponse.json({
-      channels: channelCount,
+      channels: 0, // rag-collector에서는 별도 채널 카운트 불필요
       videos: {
-        count: videoCount,
-        oldest: oldestVideo?.pubDate,
-        latest: latestVideo?.pubDate,
+        count: stats.videos.count,
+        oldest: null,
+        latest: stats.videos.latest,
       },
       news: {
-        count: newsCount,
-        oldest: oldestNews?.pubDate,
-        latest: latestNews?.pubDate,
+        count: stats.news.count,
+        oldest: null,
+        latest: stats.news.latest,
       },
     });
   } catch {
-    // 테이블이 없을 경우 기본값 반환
     return NextResponse.json({
       channels: 0,
       videos: { count: 0, oldest: null, latest: null },

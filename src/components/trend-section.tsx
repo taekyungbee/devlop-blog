@@ -2,8 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { AiTrends } from "@/lib/ai-trends";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui";
+import { Badge } from "@/components/ui";
 
 interface TrendSectionProps {
     trends: AiTrends;

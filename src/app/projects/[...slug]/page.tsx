@@ -2,7 +2,7 @@ import { projects } from "#site/content";
 import { notFound } from "next/navigation";
 import { Metadata } from "next";
 import { siteConfig } from "@/config/site";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@/components/ui";
 import { MDXContent } from "@/components/mdx-components";
 
 interface ProjectPageProps {

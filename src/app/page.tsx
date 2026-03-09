@@ -35,6 +35,21 @@ export default async function Home() {
           <p className="mt-2 text-sm md:text-base font-medium text-white/90 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-300">
             AI와 함께, 더 가치 있는 일에 몰입합니다.
           </p>
+          {/* CTA Buttons */}
+          <div className="flex gap-4 mt-6 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-500">
+            <Link
+              href="/contact#booking"
+              className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all shadow-lg hover:shadow-xl"
+            >
+              미팅 예약하기
+            </Link>
+            <Link
+              href="/contact#inquiry"
+              className="px-6 py-3 bg-white/20 backdrop-blur text-white border border-white/30 rounded-lg font-semibold hover:bg-white/30 transition-all"
+            >
+              이메일 문의하기
+            </Link>
+          </div>
         </div>
       </section>
 
